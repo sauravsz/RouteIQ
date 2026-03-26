@@ -1,0 +1,13 @@
+scenario,factory,warehouse,supply,demand,cost
+baseline,F1,W1,35,10,4
+baseline,F1,W2,35,15,6
+baseline,F1,W3,35,8,9
+baseline,F1,W4,35,12,5
+baseline,F2,W1,40,10,5
+baseline,F2,W2,40,15,4
+baseline,F2,W3,40,8,7
+baseline,F2,W4,40,12,6
+baseline,F3,W1,25,10,6
+baseline,F3,W2,25,15,3
+baseline,F3,W3,25,8,4
+baseline,F3,W4,25,12,8
