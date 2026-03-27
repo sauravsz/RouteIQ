@@ -34,3 +34,9 @@ Last updated: 2026-03-27
   - `cost_surge` (route-level cost spikes)
 - Added `run_scenario` helper in `src/scenarios.py`.
 - Updated `app.py` to loop across all scenarios, print total cost and summaries, generate per-scenario AI briefings, and render per-scenario charts.
+
+## Phase 6 - Streamlit Interactive App
+- Converted `app.py` from CLI flow to Streamlit UI.
+- Added sidebar controls for scenario selection and cost multiplier what-if analysis.
+- Embedded network and heatmap charts directly in the app view.
+- Added in-app AI executive briefing panel with runtime warning fallback.

@@ -8,7 +8,7 @@ The current implementation includes:
 - Network flow and route-cost visualizations.
 - AI-generated executive briefings from optimization summaries.
 
-This project is being built in phases. Phases 1 to 5 are complete.
+This project is being built in phases. Phases 1 to 6 are complete.
 
 ## What Problem This Solves
 
@@ -19,7 +19,7 @@ Given:
 
 RouteIQ computes shipment quantities that satisfy demand at minimum total transportation cost.
 
-## Current Features (Phases 1 to 5)
+## Current Features (Phases 1 to 6)
 
 - Scenario-based input loader from CSV (long format).
 - Linear optimization model with:
@@ -39,6 +39,9 @@ RouteIQ computes shipment quantities that satisfy demand at minimum total transp
 - Multi-scenario analysis:
   - `baseline`, `disruption`, and `cost_surge` scenarios in one dataset.
   - Per-scenario optimization, plots, and executive briefings.
+- Streamlit dashboard:
+  - Sidebar scenario selection and cost multiplier controls.
+  - Embedded plots and AI briefing in a single interactive UI.
 
 ## Project Structure
 
@@ -132,15 +135,13 @@ Examples:
 ### 4. Run the app
 
 ```bash
-python3 app.py
+streamlit run app.py
 ```
 
 What you should see:
-- Console output for each scenario with route flows, summary metrics, and total cost.
-- AI executive briefing for each scenario.
-- Plot windows for each scenario:
-  - Network flow
-  - Cost heatmap
+- Sidebar controls to switch scenario and adjust cost multiplier.
+- Key metrics, network flow chart, and cost heatmap on one page.
+- AI executive briefing panel updating with scenario changes.
 
 ## Input Data Format
 
@@ -180,7 +181,6 @@ Values may change if you edit scenario inputs.
 
 ## Roadmap
 
-- Phase 6: Streamlit interactive dashboard.
 - Phase 7: Final polish and publishing assets.
 
 Progress is tracked in PHASE_OVERVIEW.md.

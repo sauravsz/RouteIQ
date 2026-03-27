@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -6,7 +6,11 @@ import pandas as pd
 import seaborn as sns
 
 
-def plot_network(result_df: pd.DataFrame, title: str = "Network Flow") -> None:
+def plot_network(
+    result_df: pd.DataFrame,
+    title: str = "Network Flow",
+    axis: Optional[plt.Axes] = None,
+) -> plt.Figure:
     graph = nx.DiGraph()
 
     factories = result_df["factory"].unique().tolist()
@@ -28,7 +32,10 @@ def plot_network(result_df: pd.DataFrame, title: str = "Network Flow") -> None:
     for index, warehouse in enumerate(warehouses):
         positions[warehouse] = (1, index)
 
-    figure, axis = plt.subplots(figsize=(8, 5), constrained_layout=True)
+    if axis is None:
+        figure, axis = plt.subplots(figsize=(8, 5), constrained_layout=True)
+    else:
+        figure = axis.figure
 
     edges = graph.edges(data=True)
     widths = [max(0.5, data["weight"] / 5.0) for _, _, data in edges]
@@ -47,12 +54,24 @@ def plot_network(result_df: pd.DataFrame, title: str = "Network Flow") -> None:
     axis.set_title(title)
     axis.axis("off")
 
+    return figure
 
-def plot_cost_heatmap(routes_df: pd.DataFrame, title: str = "Cost Heatmap") -> None:
+
+def plot_cost_heatmap(
+    routes_df: pd.DataFrame,
+    title: str = "Cost Heatmap",
+    axis: Optional[plt.Axes] = None,
+) -> plt.Figure:
     pivot = routes_df.pivot(index="factory", columns="warehouse", values="cost")
 
-    figure, axis = plt.subplots(figsize=(6, 4), constrained_layout=True)
+    if axis is None:
+        figure, axis = plt.subplots(figsize=(6, 4), constrained_layout=True)
+    else:
+        figure = axis.figure
+
     sns.heatmap(pivot, annot=True, fmt=".1f", cmap="Reds", ax=axis)
     axis.set_title(title)
     axis.set_xlabel("Warehouse")
     axis.set_ylabel("Factory")
+
+    return figure
