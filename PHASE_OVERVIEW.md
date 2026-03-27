@@ -26,3 +26,11 @@ Last updated: 2026-03-27
   - Multi-provider env configuration support (`openai`, `groq`, `cerebras`, `google`).
 - Updated `app.py` to request and print an executive briefing after solving.
 - Added runtime fallback messaging when API key/config is missing.
+
+## Phase 5 - Multi-Scenario Analysis
+- Expanded `data/scenarios.csv` to include:
+  - `baseline`
+  - `disruption` (reduced F3 supply)
+  - `cost_surge` (route-level cost spikes)
+- Added `run_scenario` helper in `src/scenarios.py`.
+- Updated `app.py` to loop across all scenarios, print total cost and summaries, generate per-scenario AI briefings, and render per-scenario charts.

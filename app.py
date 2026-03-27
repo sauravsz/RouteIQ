@@ -1,35 +1,38 @@
-from src.optimizer import solve_transportation
-from src.scenarios import load_scenario
+from src.scenarios import run_scenario
 from src.ai_explainer import generate_executive_briefing
 from src.visualizations import plot_cost_heatmap, plot_network
 import matplotlib.pyplot as plt
 
 
+SCENARIOS = ["baseline", "disruption", "cost_surge"]
+
+
 def main() -> None:
-    routes_df, supply, demand = load_scenario("data/scenarios.csv", "baseline")
+    for scenario_name in SCENARIOS:
+        print(f"\n=== Scenario: {scenario_name} ===")
 
-    print("Supply:", supply)
-    print("Demand:", demand)
+        routes_df, result_df, summary = run_scenario("data/scenarios.csv", scenario_name)
 
-    result_df, summary = solve_transportation(routes_df, supply, demand)
+        print("Total cost:", summary["total_cost"])
 
-    print("\nOptimal flows:")
-    print(result_df)
+        print("\nOptimal flows:")
+        print(result_df)
 
-    print("\nSummary:")
-    print(summary)
+        print("\nSummary:")
+        print(summary)
 
-    try:
-        briefing = generate_executive_briefing(summary, "baseline")
-        print("\nExecutive briefing:\n")
-        print(briefing)
-    except RuntimeError as error:
-        # Keep local runs usable when API credentials are not configured yet.
-        print(f"\nExecutive briefing unavailable: {error}")
+        try:
+            briefing = generate_executive_briefing(summary, scenario_name)
+            print("\nExecutive briefing:\n")
+            print(briefing)
+        except RuntimeError as error:
+            # Keep local runs usable when API credentials are not configured yet.
+            print(f"\nExecutive briefing unavailable: {error}")
 
-    plot_network(result_df, title="Baseline Network Flow")
-    plot_cost_heatmap(routes_df, title="Baseline Cost Heatmap")
-    plt.show()
+        title_prefix = scenario_name.replace("_", " ").title()
+        plot_network(result_df, title=f"{title_prefix} Network Flow")
+        plot_cost_heatmap(routes_df, title=f"{title_prefix} Cost Heatmap")
+        plt.show()
 
 
 if __name__ == "__main__":

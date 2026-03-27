@@ -2,6 +2,8 @@ from typing import Dict, Tuple
 
 import pandas as pd
 
+from src.optimizer import solve_transportation
+
 
 def load_scenario(path: str, scenario_name: str) -> Tuple[pd.DataFrame, Dict[str, float], Dict[str, float]]:
     df = pd.read_csv(path)
@@ -18,3 +20,9 @@ def load_scenario(path: str, scenario_name: str) -> Tuple[pd.DataFrame, Dict[str
 
     # Cost matrix stays at route level
     return df, supply, demand
+
+
+def run_scenario(path: str, scenario_name: str):
+    routes_df, supply, demand = load_scenario(path, scenario_name)
+    result_df, summary = solve_transportation(routes_df, supply, demand)
+    return routes_df, result_df, summary
