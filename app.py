@@ -1,7 +1,12 @@
 import matplotlib.pyplot as plt
 import streamlit as st
 
-from src.ai_explainer import generate_executive_briefing
+from src.ai_explainer import (
+    generate_executive_briefing,
+    get_provider_default_model,
+    get_provider_model_options,
+    get_supported_providers,
+)
 from src.optimizer import solve_transportation
 from src.scenarios import load_scenario
 from src.visualizations import plot_cost_heatmap, plot_network
@@ -19,6 +24,18 @@ def main() -> None:
     st.sidebar.header("Scenario Controls")
     scenario_name = st.sidebar.selectbox("Scenario", SCENARIOS, index=0)
     cost_multiplier = st.sidebar.slider("Cost multiplier", 0.5, 3.0, 1.0, 0.1)
+
+    st.sidebar.header("AI Briefing Controls")
+    provider_options = get_supported_providers()
+    default_provider = "google" if "google" in provider_options else provider_options[0]
+    selected_provider = st.sidebar.selectbox("AI provider", provider_options, index=provider_options.index(default_provider))
+
+    model_options = get_provider_model_options(selected_provider)
+    default_model = get_provider_default_model(selected_provider)
+    default_model_index = model_options.index(default_model) if default_model in model_options else 0
+    selected_model = st.sidebar.selectbox("AI model", model_options, index=default_model_index)
+    custom_model = st.sidebar.text_input("Custom model (optional)", value="")
+    active_model = custom_model.strip() or selected_model
 
     routes_df, supply, demand = load_scenario("data/scenarios.csv", scenario_name)
     if cost_multiplier != 1.0:
@@ -58,7 +75,13 @@ def main() -> None:
 
     st.markdown("### AI Executive Briefing")
     try:
-        briefing = generate_executive_briefing(summary, scenario_name)
+        briefing = generate_executive_briefing(
+            summary,
+            scenario_name,
+            provider=selected_provider,
+            model=active_model,
+        )
+        st.caption(f"Using provider: {selected_provider} | model: {active_model}")
         st.write(briefing)
     except RuntimeError as error:
         st.warning(f"Executive briefing unavailable: {error}")

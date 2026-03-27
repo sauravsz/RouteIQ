@@ -25,6 +25,7 @@ Goal:
 - Streamlit interface:
   - Scenario selector.
   - Cost multiplier slider for what-if analysis.
+  - AI provider and model selector for briefing generation.
   - Live metrics, charts, and briefing in one dashboard.
 
 ## Project Structure
@@ -90,6 +91,11 @@ Quick provider switch command:
 ```bash
 streamlit run app.py
 ```
+
+Inside the app sidebar:
+- Choose scenario and cost multiplier.
+- Choose AI provider and AI model used for the executive briefing.
+- Optionally enter a custom model name.
 
 ## Screenshots
 
