@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Block accidental commits of local environment files.
+staged_files="$(git diff --cached --name-only --diff-filter=ACM)"
+if [[ -z "${staged_files}" ]]; then
+  exit 0
+fi
+
+secret_pattern='(sk-proj-[A-Za-z0-9_-]{20,}|gsk_[A-Za-z0-9]{20,}|csk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})'
+found_secret=0
+
+while IFS= read -r file_path; do
+  [[ -z "${file_path}" ]] && continue
+
+  case "${file_path}" in
+    .env.example)
+      ;;
+    .env|.env.*)
+      echo "ERROR: ${file_path} is staged. Keep env files local and untracked."
+      found_secret=1
+      continue
+      ;;
+  esac
+
+  staged_content="$(git show ":${file_path}" 2>/dev/null || true)"
+  if [[ -z "${staged_content}" ]]; then
+    continue
+  fi
+
+  if match_lines="$(printf '%s' "${staged_content}" | grep -nE "${secret_pattern}" || true)" && [[ -n "${match_lines}" ]]; then
+    echo "ERROR: Potential secret detected in ${file_path}:"
+    echo "${match_lines}" | head -n 5
+    found_secret=1
+  fi
+done <<< "${staged_files}"
+
+if [[ "${found_secret}" -ne 0 ]]; then
+  echo "Commit blocked by RouteIQ secret scan hook."
+  echo "Remove secrets from staged changes and retry."
+  exit 1
+fi
+
+exit 0

@@ -28,7 +28,7 @@ def plot_network(result_df: pd.DataFrame, title: str = "Network Flow") -> None:
     for index, warehouse in enumerate(warehouses):
         positions[warehouse] = (1, index)
 
-    plt.figure(figsize=(8, 5))
+    figure, axis = plt.subplots(figsize=(8, 5), constrained_layout=True)
 
     edges = graph.edges(data=True)
     widths = [max(0.5, data["weight"] / 5.0) for _, _, data in edges]
@@ -36,6 +36,7 @@ def plot_network(result_df: pd.DataFrame, title: str = "Network Flow") -> None:
     nx.draw(
         graph,
         positions,
+        ax=axis,
         with_labels=True,
         node_size=800,
         node_color=["lightblue" if node in factories else "lightgreen" for node in graph.nodes()],
@@ -43,17 +44,15 @@ def plot_network(result_df: pd.DataFrame, title: str = "Network Flow") -> None:
         arrows=False,
     )
 
-    plt.title(title)
-    plt.axis("off")
-    plt.tight_layout()
+    axis.set_title(title)
+    axis.axis("off")
 
 
 def plot_cost_heatmap(routes_df: pd.DataFrame, title: str = "Cost Heatmap") -> None:
     pivot = routes_df.pivot(index="factory", columns="warehouse", values="cost")
 
-    plt.figure(figsize=(6, 4))
-    sns.heatmap(pivot, annot=True, fmt=".1f", cmap="Reds")
-    plt.title(title)
-    plt.xlabel("Warehouse")
-    plt.ylabel("Factory")
-    plt.tight_layout()
+    figure, axis = plt.subplots(figsize=(6, 4), constrained_layout=True)
+    sns.heatmap(pivot, annot=True, fmt=".1f", cmap="Reds", ax=axis)
+    axis.set_title(title)
+    axis.set_xlabel("Warehouse")
+    axis.set_ylabel("Factory")

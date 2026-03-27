@@ -6,8 +6,9 @@ The current implementation includes:
 - Scenario loading from CSV data.
 - Cost-minimizing transportation optimization with PuLP.
 - Network flow and route-cost visualizations.
+- AI-generated executive briefings from optimization summaries.
 
-This project is being built in phases. Phases 1 to 3 are complete.
+This project is being built in phases. Phases 1 to 4 are complete.
 
 ## What Problem This Solves
 
@@ -18,7 +19,7 @@ Given:
 
 RouteIQ computes shipment quantities that satisfy demand at minimum total transportation cost.
 
-## Current Features (Phases 1 to 3)
+## Current Features (Phases 1 to 4)
 
 - Scenario-based input loader from CSV (long format).
 - Linear optimization model with:
@@ -32,6 +33,9 @@ RouteIQ computes shipment quantities that satisfy demand at minimum total transp
 - Visual outputs:
   - Directed network flow graph.
   - Cost heatmap.
+- AI explainer:
+  - Structured prompt from solution summary metrics.
+  - OpenAI-compatible narrative generation for executive updates.
 
 ## Project Structure
 
@@ -43,10 +47,11 @@ RouteIQ/
 ├── data/
 │   └── scenarios.csv
 └── src/
-    ├── __init__.py
-    ├── optimizer.py
-    ├── scenarios.py
-    └── visualizations.py
+  ├── ai_explainer.py
+  ├── __init__.py
+  ├── optimizer.py
+  ├── scenarios.py
+  └── visualizations.py
 ```
 
 ## Tech Stack
@@ -56,6 +61,7 @@ RouteIQ/
 - pandas (data handling)
 - matplotlib, seaborn (visualization)
 - networkx (network graph)
+- openai, python-dotenv (AI briefing)
 
 ## Quick Start
 
@@ -76,7 +82,48 @@ source .venv/bin/activate
 ### 3. Install dependencies
 
 ```bash
-pip install pulp pandas matplotlib seaborn networkx
+pip install pulp pandas matplotlib seaborn networkx openai python-dotenv
+```
+
+### 3.1 Configure AI Provider (Phase 4)
+
+1. Copy `.env.example` to `.env`.
+2. Set `AI_PROVIDER` to one of: `openai`, `groq`, `cerebras`, `google`.
+3. Fill the matching provider API key.
+
+Required by provider:
+- `openai`: `OPENAI_API_KEY`
+- `groq`: `GROQ_API_KEY`
+- `cerebras`: `CEREBRAS_API_KEY`
+- `google`: `GOOGLE_API_KEY`
+
+Optional per provider:
+- `*_MODEL` to override the model name.
+- `*_BASE_URL` to override endpoint base URL.
+
+### 3.2 Enable Secret-Scan Pre-Commit Hook
+
+Run once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This enables the repo-managed hook at `.githooks/pre-commit`, which blocks commits that include key-like tokens or `.env` files.
+
+### 3.3 Switch Provider Quickly
+
+Use the helper script to change provider without editing `.env` manually:
+
+```bash
+./scripts/switch_provider.sh <provider> [model]
+```
+
+Examples:
+
+```bash
+./scripts/switch_provider.sh groq
+./scripts/switch_provider.sh google gemini-2.5-flash-lite
 ```
 
 ### 4. Run the app
@@ -116,6 +163,8 @@ Rules:
 4. src/visualizations.py renders:
    - Shipment network graph.
    - Cost heatmap.
+5. src/ai_explainer.py converts summary metrics into an executive narrative.
+  - Provider selection is controlled by `AI_PROVIDER` in `.env`.
 
 ## Example Output Summary
 
@@ -127,7 +176,6 @@ Values may change if you edit scenario inputs.
 
 ## Roadmap
 
-- Phase 4: AI executive explainer.
 - Phase 5: Multi-scenario comparison.
 - Phase 6: Streamlit interactive dashboard.
 - Phase 7: Final polish and publishing assets.

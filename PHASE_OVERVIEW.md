@@ -1,6 +1,6 @@
 # RouteIQ Phase Overview
 
-Last updated: 2026-03-26
+Last updated: 2026-03-27
 
 ## Phase 1 - Problem Framing
 - Base transportation network fixed to 3 factories (F1, F2, F3) and 4 warehouses (W1-W4).
@@ -18,3 +18,11 @@ Last updated: 2026-03-26
   - Cost heatmap (factory x warehouse).
 - Updated `app.py` to generate both charts after optimization.
 - Validation run succeeded with plotting code enabled.
+
+## Phase 4 - AI Executive Explainer
+- Added `src/ai_explainer.py` with:
+  - Structured summary prompt builder for optimization outputs.
+  - OpenAI-compatible client call for executive narrative generation.
+  - Multi-provider env configuration support (`openai`, `groq`, `cerebras`, `google`).
+- Updated `app.py` to request and print an executive briefing after solving.
+- Added runtime fallback messaging when API key/config is missing.
