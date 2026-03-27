@@ -1,6 +1,6 @@
 # RouteIQ Phase Overview
 
-Last updated: 2026-03-27
+Last updated: 2026-03-28
 
 ## Phase 1 - Problem Framing
 - Base transportation network fixed to 3 factories (F1, F2, F3) and 4 warehouses (W1-W4).
@@ -40,3 +40,8 @@ Last updated: 2026-03-27
 - Added sidebar controls for scenario selection and cost multiplier what-if analysis.
 - Embedded network and heatmap charts directly in the app view.
 - Added in-app AI executive briefing panel with runtime warning fallback.
+
+## Phase 7 - Final Polish and Publishing Assets
+- Polished `README.md` for publish-ready project presentation.
+- Added `assets/` folder scaffold with screenshot guidance.
+- Updated run/setup instructions for Streamlit-first workflow.
