@@ -99,8 +99,14 @@ Inside the app sidebar:
 
 ## Screenshots
 
-Add screenshot files under `assets/` and reference them here for portfolio publishing.
-See `assets/README.md` for recommended names.
+### Baseline Scenario
+![Baseline](assets/screenshot-baseline.png)
+
+### Disruption Scenario
+![Disruption](assets/screenshot-disruption.png)
+
+### Network Builder
+![Network Builder](assets/screenshot-network-builder.png)
 
 ## Notes
 
