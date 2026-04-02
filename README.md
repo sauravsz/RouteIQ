@@ -1,5 +1,9 @@
 # RouteIQ: Transportation Optimizer + AI Explainer
 
+![Demo](assets/demo.gif)
+
+> Multi-scenario transportation optimizer with AI executive briefing
+
 RouteIQ is an interactive Streamlit app for transportation-network optimization.
 It solves a classic supply-to-demand allocation problem with linear programming,
 compares multiple scenarios, and generates an executive AI briefing.
@@ -97,16 +101,19 @@ Inside the app sidebar:
 - Choose AI provider and AI model used for the executive briefing.
 - Optionally enter a custom model name.
 
-## Screenshots
+## App Screenshots
 
-### Baseline Scenario
-![Baseline](assets/screenshot-baseline.png)
+### Key Metrics (Baseline Scenario)
+![Metrics](assets/01-metrics.png)
 
-### Disruption Scenario
-![Disruption](assets/screenshot-disruption.png)
+### Optimized Network Flow
+![Network Flow](assets/02-network-flow.png)
 
-### Network Builder
-![Network Builder](assets/screenshot-network-builder.png)
+### Route Cost Heatmap
+![Heatmap](assets/03-cost-heatmap.png)
+
+### AI-Generated Executive Briefing
+![AI Briefing](assets/04-ai-briefing.png)
 
 ## Notes
 
