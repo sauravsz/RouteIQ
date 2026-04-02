@@ -37,7 +37,6 @@ Goal:
 ```text
 RouteIQ/
 ├── README.md
-├── PHASE_OVERVIEW.md
 ├── app.py
 ├── .env.example
 ├── assets/
@@ -127,7 +126,7 @@ git config core.hooksPath .githooks
 
 ## Status
 
-Phases 1 to 7 are complete. Progress details are tracked in `PHASE_OVERVIEW.md`.
+Phases 1 to 7 are complete.
 
 ## Author
 
