@@ -884,8 +884,6 @@ def main() -> None:
 
     # ── AI Briefing ───────────────────────────────────────────────────────
     st.markdown("<p class='rq-section' style='margin-top:1.6rem'>AI Executive Briefing</p>", unsafe_allow_html=True)
-    st.caption(f"Provider: {result_state['provider']}  ·  Model: {result_state['model']}")
-
     if result_state["briefing_text"]:
         st.write(result_state["briefing_text"])
     else:
