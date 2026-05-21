@@ -650,7 +650,13 @@ def main() -> None:
         default_model = get_provider_default_model(selected_provider)
         default_model_index = model_options.index(default_model) if default_model in model_options else 0
         selected_model = st.selectbox("Model", model_options, index=default_model_index)
-        custom_model = st.text_input("Custom model override", value="", placeholder="Optional")
+        custom_model = st.text_input("Custom model override", value="", placeholder="e.g. gpt-4")
+        custom_api_key = st.text_input(
+            f"{_format_provider_label(selected_provider)} API Key", 
+            type="password", 
+            placeholder="Optional (uses default if empty)",
+            help="Provide your own API key to bypass the default rate limits."
+        )
         active_model = custom_model.strip() or selected_model
 
         st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
@@ -809,7 +815,11 @@ def main() -> None:
         briefing_error = ""
         try:
             briefing_text = generate_executive_briefing(
-                summary, scenario_name, provider=selected_provider, model=active_model
+                summary=summary,
+                scenario_name=scenario_name,
+                provider=selected_provider,
+                model=active_model,
+                api_key=custom_api_key.strip(),
             )
         except RuntimeError as error:
             briefing_error = str(error)

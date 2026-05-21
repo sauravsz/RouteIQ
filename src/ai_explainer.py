@@ -76,6 +76,7 @@ def get_provider_default_model(provider: str) -> str:
 def _resolve_provider_config(
     provider_override: str = "",
     model_override: str = "",
+    api_key_override: str = "",
 ) -> Tuple[str, str, str]:
     provider = (provider_override or _get_secret("AI_PROVIDER", "google")).strip().lower()
 
@@ -84,10 +85,10 @@ def _resolve_provider_config(
         raise RuntimeError(f"Unsupported AI_PROVIDER '{provider}'. Supported values: {supported}.")
 
     cfg = PROVIDER_CONFIG[provider]
-    api_key = _get_secret(cfg["key"])
+    api_key = (api_key_override or _get_secret(cfg["key"]) or "").strip()
     if not api_key:
         raise RuntimeError(
-            f"{cfg['key']} not set in environment or .env file for provider '{provider}'."
+            f"API Key not provided. Enter it in the sidebar or set {cfg['key']}."
         )
 
     model = (model_override or _get_secret(cfg["model"], cfg["default_model"])).strip()
@@ -137,12 +138,14 @@ def generate_executive_briefing(
     scenario_name: str,
     provider: str = "",
     model: str = "",
+    api_key: str = "",
 ) -> str:
-    api_key, resolved_model, base_url = _resolve_provider_config(
+    resolved_api_key, resolved_model, base_url = _resolve_provider_config(
         provider_override=provider,
         model_override=model,
+        api_key_override=api_key,
     )
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    client = OpenAI(api_key=resolved_api_key, base_url=base_url)
 
     system_prompt, user_prompt = build_summary_prompt(summary, scenario_name)
 
