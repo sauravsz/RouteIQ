@@ -1,11 +1,22 @@
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
 
 load_dotenv()
+
+
+def _get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Read from Streamlit secrets first, then fall back to os.environ."""
+    try:
+        import streamlit as st
+        if key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return os.getenv(key, default)
 
 
 PROVIDER_CONFIG = {
@@ -50,7 +61,7 @@ def get_supported_providers() -> List[str]:
 
 def get_provider_model_options(provider: str) -> List[str]:
     config = PROVIDER_CONFIG[provider]
-    configured_model = os.getenv(config["model"], config["default_model"])
+    configured_model = _get_secret(config["model"], config["default_model"])
     options = list(config["suggested_models"])
     if configured_model not in options:
         options.insert(0, configured_model)
@@ -59,28 +70,28 @@ def get_provider_model_options(provider: str) -> List[str]:
 
 def get_provider_default_model(provider: str) -> str:
     config = PROVIDER_CONFIG[provider]
-    return os.getenv(config["model"], config["default_model"])
+    return _get_secret(config["model"], config["default_model"])
 
 
 def _resolve_provider_config(
     provider_override: str = "",
     model_override: str = "",
 ) -> Tuple[str, str, str]:
-    provider = (provider_override or os.getenv("AI_PROVIDER", "google")).strip().lower()
+    provider = (provider_override or _get_secret("AI_PROVIDER", "google")).strip().lower()
 
     if provider not in PROVIDER_CONFIG:
         supported = ", ".join(sorted(PROVIDER_CONFIG.keys()))
         raise RuntimeError(f"Unsupported AI_PROVIDER '{provider}'. Supported values: {supported}.")
 
     cfg = PROVIDER_CONFIG[provider]
-    api_key = os.getenv(cfg["key"])
+    api_key = _get_secret(cfg["key"])
     if not api_key:
         raise RuntimeError(
             f"{cfg['key']} not set in environment or .env file for provider '{provider}'."
         )
 
-    model = (model_override or os.getenv(cfg["model"], cfg["default_model"])).strip()
-    base_url = os.getenv(cfg["base"], cfg["default_base"])
+    model = (model_override or _get_secret(cfg["model"], cfg["default_model"])).strip()
+    base_url = _get_secret(cfg["base"], cfg["default_base"])
     return api_key, model, base_url
 
 
