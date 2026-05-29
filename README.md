@@ -124,6 +124,17 @@ git config core.hooksPath .githooks
 
 - If the solver reports infeasible, verify total supply is at least total demand for the selected scenario.
 
+## ❓ Frequently Asked Questions
+
+**Q: Can I use my own supply/demand data?**  
+A: Yes! Simply update `data/scenarios.csv` with your own factories, warehouses, and route costs. The PuLP optimizer dynamically scales to the size of the dataset.
+
+**Q: Which AI provider is best for the executive briefing?**  
+A: The app supports OpenAI, Groq, Cerebras, and Google (Gemini). For the fastest generation, Groq is recommended. For complex analysis, OpenAI (GPT-4o) or Google (Gemini 1.5 Pro) provides deeper insights.
+
+**Q: What happens if demand exceeds supply?**  
+A: The linear programming model requires total supply to be greater than or equal to total demand for a feasible solution. If demand exceeds supply, the solver will report an "Infeasible" status.
+
 ## Status
 
 Phases 1 to 7 are complete.
