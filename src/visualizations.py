@@ -69,6 +69,7 @@ def plot_network_plotly(result_df: pd.DataFrame, title: str = "Network Flow") ->
         showlegend=False,
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Sora, sans-serif"),

@@ -52,10 +52,11 @@ def _cached_load_scenario(data_path_str: str, scenario_name: str):
 def _apply_ui_theme(theme_mode: str) -> None:
     is_dark = theme_mode.lower() == "dark"
 
-    bg_page = "linear-gradient(160deg, #0f172a 0%, #111827 100%)" if is_dark else "linear-gradient(160deg, #f7f9fc 0%, #eef2f7 100%)"
-    text_base = "#e5e7eb" if is_dark else "#1f2937"
+    bg_page = "linear-gradient(160deg, #0b0f19 0%, #111827 100%)" if is_dark else "linear-gradient(160deg, #f7f9fc 0%, #eef2f7 100%)"
+    text_base = "#f8fafc" if is_dark else "#1f2937"
     text_muted = "#94a3b8" if is_dark else "#64748b"
-    border = "rgba(148,163,184,0.22)" if is_dark else "rgba(148,163,184,0.28)"
+    border = "rgba(148,163,184,0.18)" if is_dark else "rgba(148,163,184,0.28)"
+    panel_bg = "rgba(15,23,42,0.65)" if is_dark else "rgba(255,255,255,0.86)"
 
     css = f"""
         <style>
@@ -65,45 +66,52 @@ def _apply_ui_theme(theme_mode: str) -> None:
         --rq-text: {text_base};
         --rq-muted: {text_muted};
         --rq-border: {border};
+        --rq-panel: {panel_bg};
     }}
 
     .stApp {{
         background: {bg_page} !important;
-        color: var(--rq-text);
+        color: var(--rq-text) !important;
         font-family: 'Sora', sans-serif;
+    }}
+
+    [data-testid="stSidebar"] {{
+        background: #090d16 !important;
+        border-right: 1px solid var(--rq-border) !important;
     }}
 
     .rq-title {{
         font-family: 'DM Serif Display', serif;
-        font-size: 2rem;
+        font-size: 2.2rem;
         font-weight: 400;
         letter-spacing: -0.03em;
-        color: var(--rq-text);
+        color: #ffffff;
         line-height: 1.2;
         margin-bottom: 0.2rem;
     }}
 
     .rq-subtitle {{
         font-family: 'Sora', sans-serif;
-        font-size: 0.84rem;
+        font-size: 0.86rem;
         color: var(--rq-muted);
-        margin-bottom: 1.4rem;
+        margin-bottom: 1.6rem;
         letter-spacing: 0.01em;
     }}
 
     .rq-section {{
         font-family: 'Sora', sans-serif !important;
-        font-size: 0.72rem !important;
-        font-weight: 600 !important;
-        letter-spacing: 0.09em !important;
+        font-size: 0.74rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.1em !important;
         text-transform: uppercase !important;
-        color: var(--rq-muted) !important;
+        color: #818cf8 !important;
+        margin-bottom: 0.8rem;
     }}
 
     .rq-divider {{
         border: none;
         border-top: 1px solid var(--rq-border);
-        margin: 1rem 0;
+        margin: 1.2rem 0;
     }}
 
     .rq-side-title {{
@@ -111,10 +119,23 @@ def _apply_ui_theme(theme_mode: str) -> None:
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: var(--rq-muted);
+        color: #818cf8;
         margin-top: 0;
         margin-bottom: 0.42rem;
         line-height: 1.2;
+    }}
+
+    [data-testid="stMetric"] {{
+        background: var(--rq-panel) !important;
+        border: 1px solid var(--rq-border) !important;
+        border-radius: 12px !important;
+        padding: 1rem 1.2rem !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }}
+
+    [data-testid="stMetricValue"] > div {{
+        color: #ffffff !important;
+        font-weight: 600 !important;
     }}
 
     .rq-side-gap-xs {{ height: 0.16rem; }}
@@ -336,8 +357,8 @@ def main() -> None:
         )
         active_model = custom_model.strip() or selected_model
 
-    _apply_ui_theme("light")
-    is_dark_mode = False
+    _apply_ui_theme("dark")
+    is_dark_mode = True
 
     # ── Load data ─────────────────────────────────────────────────────────
     if uploaded_file is not None:
@@ -418,7 +439,6 @@ def main() -> None:
                 fixed_lane_cost=fixed_lane_cost,
             )
 
-            # Calculate ESG carbon emissions
             result_df = calculate_carbon_emissions(result_df)
             summary["total_co2_kg"] = float(result_df["co2_emissions_kg"].sum())
         except (RuntimeError, ValueError) as error:
