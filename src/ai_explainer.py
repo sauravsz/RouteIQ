@@ -1,15 +1,11 @@
 import os
 from typing import Dict, List, Optional, Tuple
-
 from dotenv import load_dotenv
-from openai import OpenAI
-
+from openai import OpenAI, APIError
 
 load_dotenv()
 
-
 def _get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
-    """Read from Streamlit secrets first, then fall back to os.environ."""
     try:
         import streamlit as st
         if key in st.secrets:
@@ -17,7 +13,6 @@ def _get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
     except Exception:
         pass
     return os.getenv(key, default)
-
 
 PROVIDER_CONFIG = {
     "openai": {
@@ -54,24 +49,20 @@ PROVIDER_CONFIG = {
     },
 }
 
-
 def get_supported_providers() -> List[str]:
     return list(PROVIDER_CONFIG.keys())
 
-
 def get_provider_model_options(provider: str) -> List[str]:
-    config = PROVIDER_CONFIG[provider]
+    config = PROVIDER_CONFIG.get(provider, PROVIDER_CONFIG["google"])
     configured_model = _get_secret(config["model"], config["default_model"])
     options = list(config["suggested_models"])
     if configured_model not in options:
         options.insert(0, configured_model)
     return options
 
-
 def get_provider_default_model(provider: str) -> str:
-    config = PROVIDER_CONFIG[provider]
+    config = PROVIDER_CONFIG.get(provider, PROVIDER_CONFIG["google"])
     return _get_secret(config["model"], config["default_model"])
-
 
 def _resolve_provider_config(
     provider_override: str = "",
@@ -88,13 +79,12 @@ def _resolve_provider_config(
     api_key = (api_key_override or _get_secret(cfg["key"]) or "").strip()
     if not api_key:
         raise RuntimeError(
-            f"API Key not provided. Enter it in the sidebar or set {cfg['key']}."
+            f"API Key not provided for provider '{provider}'. Enter it in sidebar or set env '{cfg['key']}'."
         )
 
     model = (model_override or _get_secret(cfg["model"], cfg["default_model"])).strip()
     base_url = _get_secret(cfg["base"], cfg["default_base"])
     return api_key, model, base_url
-
 
 def build_summary_prompt(summary: Dict, scenario_name: str) -> Tuple[str, str]:
     total_cost = summary["total_cost"]
@@ -132,7 +122,6 @@ def build_summary_prompt(summary: Dict, scenario_name: str) -> Tuple[str, str]:
 
     return system_prompt, user_prompt
 
-
 def generate_executive_briefing(
     summary: Dict,
     scenario_name: str,
@@ -140,26 +129,31 @@ def generate_executive_briefing(
     model: str = "",
     api_key: str = "",
 ) -> str:
-    resolved_api_key, resolved_model, base_url = _resolve_provider_config(
-        provider_override=provider,
-        model_override=model,
-        api_key_override=api_key,
-    )
-    client = OpenAI(api_key=resolved_api_key, base_url=base_url)
+    try:
+        resolved_api_key, resolved_model, base_url = _resolve_provider_config(
+            provider_override=provider,
+            model_override=model,
+            api_key_override=api_key,
+        )
+        client = OpenAI(api_key=resolved_api_key, base_url=base_url if base_url else None)
 
-    system_prompt, user_prompt = build_summary_prompt(summary, scenario_name)
+        system_prompt, user_prompt = build_summary_prompt(summary, scenario_name)
 
-    response = client.chat.completions.create(
-        model=resolved_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.3,
-    )
+        response = client.chat.completions.create(
+            model=resolved_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.3,
+        )
 
-    content = response.choices[0].message.content
-    if not content:
-        raise RuntimeError("AI API returned an empty briefing.")
+        content = response.choices[0].message.content
+        if not content:
+            raise RuntimeError("AI API returned an empty briefing.")
 
-    return content
+        return content
+    except APIError as e:
+        raise RuntimeError(f"AI Provider API Error: {str(e)}")
+    except Exception as e:
+        raise RuntimeError(f"Executive briefing generation failed: {str(e)}")

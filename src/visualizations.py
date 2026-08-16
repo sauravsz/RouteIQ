@@ -1,10 +1,101 @@
 from typing import Dict, Optional
-
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
 import seaborn as sns
+import plotly.graph_objects as go
+import plotly.express as px
 
+def plot_network_plotly(result_df: pd.DataFrame, title: str = "Network Flow") -> go.Figure:
+    factories = result_df["factory"].unique().tolist()
+    warehouses = result_df["warehouse"].unique().tolist()
+
+    node_x = []
+    node_y = []
+    node_text = []
+    node_color = []
+
+    for idx, f in enumerate(factories):
+        node_x.append(0)
+        node_y.append(idx)
+        node_text.append(f"Factory: {f}")
+        node_color.append("#60a5fa")
+
+    for idx, w in enumerate(warehouses):
+        node_x.append(1)
+        node_y.append(idx)
+        node_text.append(f"Warehouse: {w}")
+        node_color.append("#34d399")
+
+    edge_x = []
+    edge_y = []
+    edge_hover = []
+
+    fig = go.Figure()
+
+    active_flows = result_df[result_df["flow"] > 0]
+    for _, row in active_flows.iterrows():
+        f_idx = factories.index(row["factory"])
+        w_idx = warehouses.index(row["warehouse"])
+        
+        fig.add_trace(
+            go.Scatter(
+                x=[0, 1],
+                y=[f_idx, w_idx],
+                mode="lines",
+                line=dict(width=max(1, row["flow"] / 3.0), color="#94a3b8"),
+                hoverinfo="text",
+                text=f"Route: {row['factory']} → {row['warehouse']}<br>Flow: {row['flow']}<br>Cost: {row['cost']:.2f}",
+                showlegend=False,
+            )
+        )
+
+    fig.add_trace(
+        go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode="markers+text",
+            marker=dict(size=35, color=node_color, line=dict(width=2, color="#1e293b")),
+            text=[t.split(": ")[1] for t in node_text],
+            textposition="middle center",
+            hoverinfo="text",
+            hovertext=node_text,
+            showlegend=False,
+        )
+    )
+
+    fig.update_layout(
+        title=title,
+        showlegend=False,
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Sora, sans-serif"),
+        height=400,
+        margin=dict(l=20, r=20, t=40, b=20),
+    )
+    return fig
+
+def plot_cost_heatmap_plotly(routes_df: pd.DataFrame, title: str = "Cost Heatmap") -> go.Figure:
+    pivot = routes_df.pivot(index="factory", columns="warehouse", values="cost")
+    
+    fig = px.imshow(
+        pivot,
+        text_auto=".1f",
+        aspect="auto",
+        color_continuous_scale="Reds",
+        title=title,
+        labels=dict(x="Warehouse", y="Factory", color="Cost"),
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Sora, sans-serif"),
+        height=400,
+        margin=dict(l=20, r=20, t=40, b=20),
+    )
+    return fig
 
 def plot_network(
     result_df: pd.DataFrame,
@@ -26,14 +117,14 @@ def plot_network(
         if row["flow"] > 0:
             graph.add_edge(row["factory"], row["warehouse"], weight=row["flow"])
 
-    # Keep a simple left-right layout so supply and demand nodes are easy to scan.
     positions: Dict[str, tuple] = {}
     for index, factory in enumerate(factories):
         positions[factory] = (0, index)
     for index, warehouse in enumerate(warehouses):
         positions[warehouse] = (1, index)
 
-    if axis is None:
+    standalone = axis is None
+    if standalone:
         figure, axis = plt.subplots(figsize=(8, 5), constrained_layout=True)
     else:
         figure = axis.figure
@@ -64,8 +155,10 @@ def plot_network(
     axis.set_title(title, color=text_color)
     axis.axis("off")
 
-    return figure
+    if standalone:
+        plt.close(figure)
 
+    return figure
 
 def plot_cost_heatmap(
     routes_df: pd.DataFrame,
@@ -75,7 +168,8 @@ def plot_cost_heatmap(
 ) -> plt.Figure:
     pivot = routes_df.pivot(index="factory", columns="warehouse", values="cost")
 
-    if axis is None:
+    standalone = axis is None
+    if standalone:
         figure, axis = plt.subplots(figsize=(6, 4), constrained_layout=True)
     else:
         figure = axis.figure
@@ -98,5 +192,8 @@ def plot_cost_heatmap(
     axis.set_ylabel("Factory", color=text_color)
     axis.tick_params(axis="x", colors=text_color)
     axis.tick_params(axis="y", colors=text_color)
+
+    if standalone:
+        plt.close(figure)
 
     return figure

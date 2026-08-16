@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+import yaml
 from io import BytesIO
 from pathlib import Path
 from typing import List, Optional
@@ -17,35 +18,44 @@ from src.ai_explainer import (
     get_provider_model_options,
     get_supported_providers,
 )
-from src.optimizer import solve_transportation
+from src.optimizer import solve_transportation, get_available_solvers
 from src.scenarios import load_scenario
-from src.visualizations import plot_cost_heatmap, plot_network
-
+from src.visualizations import (
+    plot_cost_heatmap,
+    plot_network,
+    plot_cost_heatmap_plotly,
+    plot_network_plotly,
+)
+from src.features import (
+    calculate_carbon_emissions,
+    run_monte_carlo_simulation,
+    generate_pdf_report,
+    generate_excel_report,
+)
 
 SCENARIOS = ["baseline", "disruption", "cost_surge"]
-DATA_FILE_PATH = Path(__file__).resolve().parent / "data" / "scenarios.csv"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_FILE_PATH = BASE_DIR / "data" / "scenarios.csv"
+CONFIG_FILE_PATH = BASE_DIR / "config.yaml"
 
+@st.cache_data
+def _load_config():
+    if CONFIG_FILE_PATH.exists():
+        with open(CONFIG_FILE_PATH, "r") as f:
+            return yaml.safe_load(f)
+    return {}
+
+@st.cache_data
+def _cached_load_scenario(data_path_str: str, scenario_name: str):
+    return load_scenario(data_path_str, scenario_name)
 
 def _apply_ui_theme(theme_mode: str) -> None:
     is_dark = theme_mode.lower() == "dark"
 
     bg_page = "linear-gradient(160deg, #0f172a 0%, #111827 100%)" if is_dark else "linear-gradient(160deg, #f7f9fc 0%, #eef2f7 100%)"
-    bg_sidebar = "linear-gradient(180deg, #0b1220 0%, #111827 100%)" if is_dark else "linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%)"
-    header_bg = "rgba(15,23,42,0.95)" if is_dark else "rgba(247,249,252,0.95)"
     text_base = "#e5e7eb" if is_dark else "#1f2937"
     text_muted = "#94a3b8" if is_dark else "#64748b"
     border = "rgba(148,163,184,0.22)" if is_dark else "rgba(148,163,184,0.28)"
-    panel_bg = "rgba(15,23,42,0.35)" if is_dark else "rgba(255,255,255,0.86)"
-    input_bg = "rgba(15,23,42,0.5)" if is_dark else "#ffffff"
-    accent = "#6366f1"
-    accent_soft = "rgba(99,102,241,0.16)" if is_dark else "rgba(99,102,241,0.10)"
-    select_menu_bg = "#111827" if is_dark else "#ffffff"
-    grid_bg = "#0f172a" if is_dark else "#ffffff"
-    grid_bg_alt = "#0b1220" if is_dark else "#f8fafc"
-    grid_header = "#1e293b" if is_dark else "#eef2f7"
-    grid_text = "#e5e7eb" if is_dark else "#1f2937"
-    grid_text_muted = "#94a3b8" if is_dark else "#64748b"
-    grid_border = "rgba(148,163,184,0.20)" if is_dark else "rgba(148,163,184,0.28)"
 
     css = f"""
         <style>
@@ -55,388 +65,70 @@ def _apply_ui_theme(theme_mode: str) -> None:
         --rq-text: {text_base};
         --rq-muted: {text_muted};
         --rq-border: {border};
-        --rq-panel: {panel_bg};
-        --rq-input: {input_bg};
-        --rq-accent: {accent};
-        --rq-accent-soft: {accent_soft};
-
-        --rq-gdg-bg-cell: {grid_bg};
-        --rq-gdg-bg-cell-medium: {grid_bg_alt};
-        --rq-gdg-bg-header: {grid_header};
-        --rq-gdg-bg-header-hovered: {grid_header};
-        --rq-gdg-bg-header-focus: {grid_header};
-        --rq-gdg-bg-search: {accent_soft};
-        --rq-gdg-border: {grid_border};
-        --rq-gdg-h-border: {grid_border};
-        --rq-gdg-text: {grid_text};
-        --rq-gdg-text-muted: {grid_text_muted};
-        --rq-gdg-accent: {accent};
-        --rq-gdg-accent-fg: {grid_text};
     }}
 
-    .stApp,
-    [data-testid="stAppViewContainer"] {{
+    .stApp {{
         background: {bg_page} !important;
         color: var(--rq-text);
         font-family: 'Sora', sans-serif;
     }}
 
-    /* Global UI typography baseline */
-    [data-testid="stAppViewContainer"] p,
-    [data-testid="stAppViewContainer"] label,
-    [data-testid="stAppViewContainer"] small,
-    [data-testid="stAppViewContainer"] input,
-    [data-testid="stAppViewContainer"] select,
-    [data-testid="stAppViewContainer"] textarea,
-    [data-testid="stAppViewContainer"] button,
-    [data-testid="stAppViewContainer"] li,
-    [data-testid="stAppViewContainer"] a {{
-        font-family: 'Sora', sans-serif !important;
-    }}
-
-    /* Preserve Streamlit icon ligatures globally */
-    .material-icons,
-    .material-symbols-outlined,
-    .material-symbols-rounded,
-    [class*="material-symbols"] {{
-        font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        line-height: 1 !important;
-    }}
-
-    [data-testid="stMain"] {{
-        background: transparent !important;
-    }}
-
-    [data-testid="stHeader"] {{
-        background: {header_bg} !important;
-        border-bottom: 1px solid var(--rq-border) !important;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-    }}
-
-    [data-testid="stSidebar"] {{
-        background: {bg_sidebar} !important;
-        border-right: 1px solid var(--rq-border) !important;
-    }}
-
-    [data-testid="stSidebar"] .block-container {{
-        padding-top: 0 !important;
-        padding-left: 0.85rem !important;
-        padding-right: 0.85rem !important;
-    }}
-
-    [data-testid="stSidebarContent"],
-    [data-testid="stSidebarContent"] > div,
-    [data-testid="stSidebarUserContent"] {{
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }}
-
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:first-child {{
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }}
-
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] input,
-    [data-testid="stSidebar"] textarea,
-    [data-testid="stSidebar"] button,
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
-    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] {{
-        font-family: 'Sora', sans-serif !important;
-    }}
-
-    /* Keep Streamlit icon ligatures on icon font to avoid text like keyboard_arrow_right */
-    [data-testid="stSidebar"] .material-icons,
-    [data-testid="stSidebar"] .material-symbols-outlined,
-    [data-testid="stSidebar"] .material-symbols-rounded,
-    [data-testid="stSidebar"] [class*="material-symbols"] {{
-        font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        line-height: 1 !important;
-    }}
-
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{
-        gap: 0.45rem !important;
-    }}
-
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] input,
-    [data-testid="stSidebar"] textarea,
-    [data-testid="stSidebar"] button {{
-        line-height: 1.35 !important;
-    }}
-
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {{
-        margin-top: 0 !important;
-        margin-bottom: 0.35rem !important;
-    }}
-
-    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] {{
-        margin-bottom: 0.35rem !important;
-    }}
-
-    [data-testid="stSidebar"] .stButton,
-    [data-testid="stSidebar"] .stSelectbox,
-    [data-testid="stSidebar"] .stSlider,
-    [data-testid="stSidebar"] .stToggle,
-    [data-testid="stSidebar"] .stTextInput,
-    [data-testid="stSidebar"] .stNumberInput {{
-        margin-top: 0.06rem !important;
-        margin-bottom: 0.2rem !important;
-    }}
-
-    [data-testid="stSidebar"] .stToggle label {{
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-    }}
-
-    [data-testid="stSidebar"] .stToggle {{
-        margin-top: 0.2rem !important;
-        margin-bottom: 0.25rem !important;
-    }}
-
-    [data-testid="stSidebar"] .stToggle [data-testid="stMarkdownContainer"] p {{
-        margin: 0 !important;
-        line-height: 1.2 !important;
-        transform: translateY(2px) !important;
-    }}
-
-    [data-testid="stSidebar"] .stToggle > label {{
-        align-items: center !important;
-        gap: 0.55rem !important;
-    }}
-
-    [data-testid="stSidebar"] .stButton {{
-        margin-top: 0 !important;
-    }}
-
-    .block-container {{
-        padding-top: 4.1rem !important;
-        padding-bottom: 2.2rem !important;
-        max-width: 1200px;
-    }}
-
     .rq-title {{
-            font-family: 'DM Serif Display', serif;
-            font-size: 2rem;
-            font-weight: 400;
-            letter-spacing: -0.03em;
-            color: var(--rq-text);
-            line-height: 1.2;
-            margin-bottom: 0.2rem;
-        }}
+        font-family: 'DM Serif Display', serif;
+        font-size: 2rem;
+        font-weight: 400;
+        letter-spacing: -0.03em;
+        color: var(--rq-text);
+        line-height: 1.2;
+        margin-bottom: 0.2rem;
+    }}
 
     .rq-subtitle {{
-            font-family: 'Sora', sans-serif;
-            font-size: 0.84rem;
-            color: var(--rq-muted);
-            margin-bottom: 1.4rem;
-            letter-spacing: 0.01em;
-        }}
+        font-family: 'Sora', sans-serif;
+        font-size: 0.84rem;
+        color: var(--rq-muted);
+        margin-bottom: 1.4rem;
+        letter-spacing: 0.01em;
+    }}
 
-    .rq-section,
-    .rq-table-label,
-    [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 {{
-            font-family: 'Sora', sans-serif !important;
-            font-size: 0.72rem !important;
-            font-weight: 600 !important;
-            letter-spacing: 0.09em !important;
-            text-transform: uppercase !important;
-            color: var(--rq-muted) !important;
-        }}
+    .rq-section {{
+        font-family: 'Sora', sans-serif !important;
+        font-size: 0.72rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.09em !important;
+        text-transform: uppercase !important;
+        color: var(--rq-muted) !important;
+    }}
 
     .rq-divider {{
-            border: none;
-            border-top: 1px solid var(--rq-border);
-            margin: 1rem 0;
-        }}
-
-        .rq-side-title {{
-            font-size: 0.76rem;
-            font-weight: 700;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: var(--rq-muted);
-            margin-top: 0;
-            margin-bottom: 0.42rem;
-            line-height: 1.2;
-        }}
-
-        .rq-side-note {{
-            font-size: 0.74rem;
-            color: var(--rq-muted);
-            margin-bottom: 0.4rem;
-            line-height: 1.35;
-        }}
-
-        .rq-side-rule {{
-            border: 0;
-            border-top: 1px solid var(--rq-border);
-            margin: 0.45rem 0 0.45rem 0;
-        }}
-
-        .rq-side-gap-xs {{
-            height: 0.16rem;
-        }}
-
-        .rq-side-gap-sm {{
-            height: 0.3rem;
-        }}
-
-        .rq-side-gap-md {{
-            height: 0.5rem;
-        }}
-
-        [data-testid="stSidebar"] [data-testid="stExpander"] {{
-            margin-top: 0.2rem !important;
-            margin-bottom: 0.25rem !important;
-        }}
-
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary {{
-            padding-top: 0.2rem !important;
-            padding-bottom: 0.2rem !important;
-        }}
-
-    .stButton > button {{
-            border-radius: 10px !important;
-            font-family: 'Sora', sans-serif !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 0.4rem !important;
-            line-height: 1 !important;
-            padding-top: 0.58rem !important;
-            padding-bottom: 0.58rem !important;
-        }}
-
-    .stButton > button[kind="primary"] {{
-            background: var(--rq-accent) !important;
-            border-color: var(--rq-accent) !important;
-        }}
-
-    .stButton > button[kind="primary"]:hover {{
-            filter: brightness(1.08) !important;
-        }}
-
-    [data-baseweb="select"] > div,
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input {{
-            background: var(--rq-input) !important;
-            border: 1px solid var(--rq-border) !important;
-            border-radius: 9px !important;
-            color: var(--rq-text) !important;
-            font-family: 'Sora', sans-serif !important;
-        }}
-
-    [data-baseweb="select"] span,
-    [data-baseweb="select"] input,
-    [data-baseweb="input"] input,
-    [data-baseweb="input"] textarea {{
-            color: var(--rq-text) !important;
-        }}
-
-    [data-baseweb="popover"] [role="listbox"] {{
-            background: {select_menu_bg} !important;
-            border: 1px solid var(--rq-border) !important;
-        }}
-
-    [data-baseweb="popover"] [role="option"] {{
-            color: var(--rq-text) !important;
-            background: {select_menu_bg} !important;
-        }}
-
-    [data-baseweb="popover"] [role="option"][aria-selected="true"] {{
-            background: var(--rq-accent-soft) !important;
-        }}
-
-    [data-testid="stMetric"] {{
-            background: var(--rq-panel) !important;
-            border: 1px solid var(--rq-border) !important;
-            border-radius: 14px !important;
-            padding: 1rem 1.2rem !important;
-        }}
-
-    [data-testid="stMetricValue"] > div {{
-            color: var(--rq-text) !important;
-        }}
-
-    [data-testid="stMetricLabel"] > div,
-    [data-testid="stCaptionContainer"] {{
-            color: var(--rq-muted) !important;
-        }}
-
-    [data-testid="stDataEditor"],
-    [data-testid="stDataFrame"],
-    [data-testid="stImage"],
-    [data-testid="stExpander"] > details {{
-            border: 1px solid var(--rq-border) !important;
-            border-radius: 12px !important;
-            overflow: hidden;
+        border: none;
+        border-top: 1px solid var(--rq-border);
+        margin: 1rem 0;
     }}
 
-    [data-testid="stDataFrame"] table th,
-    [data-testid="stDataFrame"] table td {{
-        text-align: center !important;
+    .rq-side-title {{
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--rq-muted);
+        margin-top: 0;
+        margin-bottom: 0.42rem;
+        line-height: 1.2;
     }}
 
-    [data-testid="stDataEditor"] [role="columnheader"],
-    [data-testid="stDataEditor"] [role="gridcell"] {{
-        text-align: center !important;
-        justify-content: center !important;
-    }}
-
-    [data-testid="stDataEditor"],
-    [data-testid="stDataFrame"],
-    .stDataFrameGlideDataEditor,
-    .stDataFrameGlideDataEditor > div {{
-        --gdg-bg-cell: var(--rq-gdg-bg-cell) !important;
-        --gdg-bg-cell-medium: var(--rq-gdg-bg-cell-medium) !important;
-        --gdg-bg-header: var(--rq-gdg-bg-header) !important;
-        --gdg-bg-header-hovered: var(--rq-gdg-bg-header-hovered) !important;
-        --gdg-bg-header-has-focus: var(--rq-gdg-bg-header-focus) !important;
-        --gdg-bg-search-result: var(--rq-gdg-bg-search) !important;
-        --gdg-border-color: var(--rq-gdg-border) !important;
-        --gdg-horizontal-border-color: var(--rq-gdg-h-border) !important;
-        --gdg-text-dark: var(--rq-gdg-text) !important;
-        --gdg-text-medium: var(--rq-gdg-text-muted) !important;
-        --gdg-text-light: var(--rq-gdg-text-muted) !important;
-        --gdg-accent-color: var(--rq-gdg-accent) !important;
-        --gdg-accent-fg: var(--rq-gdg-accent-fg) !important;
-    }}
-
-    .stInfo {{
-        background: var(--rq-accent-soft) !important;
-        border-color: var(--rq-accent) !important;
-    }}
+    .rq-side-gap-xs {{ height: 0.16rem; }}
+    .rq-side-gap-sm {{ height: 0.3rem; }}
+    .rq-side-gap-md {{ height: 0.5rem; }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
-
-
-def _get_effective_theme_mode(theme_preference: str) -> str:
-    if theme_preference == "Light":
-        return "light"
-    if theme_preference == "Dark":
-        return "dark"
-    configured_base = st.get_option("theme.base")
-    if configured_base in {"light", "dark"}:
-        return configured_base
-    return "light"
-
 
 def _figure_to_png_bytes(figure: plt.Figure) -> bytes:
     buffer = BytesIO()
     figure.savefig(buffer, format="png", dpi=170, bbox_inches="tight", facecolor=figure.get_facecolor())
     buffer.seek(0)
     return buffer.getvalue()
-
 
 def _build_state_from_routes(routes_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     supply_df = (
@@ -447,7 +139,6 @@ def _build_state_from_routes(routes_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.
     )
     cost_matrix_df = routes_df.pivot(index="factory", columns="warehouse", values="cost").sort_index()
     return supply_df, demand_df, cost_matrix_df
-
 
 def _get_editor_state(scenario_name: str, routes_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     state_key = f"editor_state_{scenario_name}"
@@ -461,7 +152,6 @@ def _get_editor_state(scenario_name: str, routes_df: pd.DataFrame) -> tuple[pd.D
     state = st.session_state[state_key]
     return state["supply_df"], state["demand_df"], state["cost_matrix_df"]
 
-
 def _save_editor_state(
     scenario_name: str,
     supply_df: pd.DataFrame,
@@ -474,7 +164,6 @@ def _save_editor_state(
         "demand_df": demand_df,
         "cost_matrix_df": cost_matrix_df,
     }
-
 
 def _to_optimizer_inputs(
     supply_df: pd.DataFrame,
@@ -510,10 +199,8 @@ def _to_optimizer_inputs(
     routes_df = pd.DataFrame(rows)
     return routes_df, supply_map, demand_map
 
-
 def _format_scenario_label(scenario: str) -> str:
     return scenario.replace("_", " ").title()
-
 
 def _format_provider_label(provider: str) -> str:
     normalized = provider.strip().lower()
@@ -525,7 +212,6 @@ def _format_provider_label(provider: str) -> str:
     }
     return labels.get(normalized, provider[:1].upper() + provider[1:])
 
-
 def _render_centered_grid(
     frame: pd.DataFrame,
     key: str,
@@ -535,14 +221,11 @@ def _render_centered_grid(
 ) -> pd.DataFrame:
     if HAS_AGGRID:
         frame_for_grid = frame.copy().reset_index(drop=True)
-        # Guard against framework-added helper columns leaking into the grid.
         frame_for_grid = frame_for_grid[
             [column for column in frame_for_grid.columns if not str(column).startswith("_")]
         ]
-
         row_count = max(1, len(frame_for_grid.index))
         computed_height = height if height is not None else min(460, 38 + (row_count * 36))
-
         locked_columns = set(non_editable_cols or [])
         column_defs = [
             {
@@ -554,7 +237,6 @@ def _render_centered_grid(
                 "suppressMenu": True,
                 "flex": 1,
                 "cellStyle": {"textAlign": "center"},
-                "headerClass": "rq-ag-center-header",
             }
             for column_name in frame_for_grid.columns
         ]
@@ -585,21 +267,6 @@ def _render_centered_grid(
             theme="streamlit",
             key=key,
             height=computed_height,
-            custom_css={
-                ".ag-header-cell-label": {"justify-content": "center"},
-                ".rq-ag-center-header .ag-header-cell-label": {"justify-content": "center"},
-                ".ag-cell": {
-                    "display": "flex",
-                    "align-items": "center",
-                    "justify-content": "center",
-                },
-                ".ag-cell-inline-editing input": {
-                    "text-align": "center !important",
-                },
-                ".ag-input-field-input": {
-                    "text-align": "center !important",
-                },
-            },
         )
         cleaned = pd.DataFrame(response["data"])
         cleaned = cleaned[[column for column in cleaned.columns if str(column) in frame.columns]]
@@ -607,35 +274,46 @@ def _render_centered_grid(
 
     return frame
 
-
 def main() -> None:
     st.set_page_config(page_title="RouteIQ", layout="wide", page_icon="🔀")
 
     # ── Sidebar ──────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown("<div class='rq-side-title'>Controls</div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-gap-sm'></div>", unsafe_allow_html=True)
-
         auto_run = st.toggle("Auto-run on changes", value=False)
+        use_plotly = st.toggle("Interactive Plotly charts", value=True)
         run_clicked = st.button("▶  Run optimization", type="primary", width="stretch")
 
         st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-title'>Scenario</div>", unsafe_allow_html=True)
+        st.markdown("<div class='rq-side-title'>Data Source & Scenario</div>", unsafe_allow_html=True)
+        
+        uploaded_file = st.file_uploader("Upload Custom CSV", type=["csv"], help="Upload custom scenario dataset")
 
-        st.markdown("<div class='rq-side-gap-xs'></div>", unsafe_allow_html=True)
         scenario_name = st.selectbox(
             "Scenario",
-            SCENARIOS,
+            SCENARIOS if uploaded_file is None else ["custom"],
             index=0,
             format_func=_format_scenario_label,
-            label_visibility="collapsed",
         )
-        st.markdown("<div class='rq-side-gap-sm'></div>", unsafe_allow_html=True)
-        cost_multiplier = st.slider("Cost multiplier", 0.5, 3.0, 1.0, 0.1)
+        
+        col_mult, col_reset = st.columns([0.7, 0.3])
+        with col_mult:
+            cost_multiplier = st.slider("Cost multiplier", 0.5, 3.0, 1.0, 0.1)
+        with col_reset:
+            st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+            if st.button("Reset", key="reset_multiplier"):
+                cost_multiplier = 1.0
+
+        st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='rq-side-title'>Solver & MIP Settings</div>", unsafe_allow_html=True)
+        
+        available_solvers = get_available_solvers()
+        selected_solver = st.selectbox("Solver engine", list(available_solvers.keys()), index=0)
+        enable_mip = st.checkbox("Enable MIP Fixed-Charge", value=False)
+        fixed_lane_cost = st.number_input("Fixed Lane Cost", min_value=0.0, value=0.0, step=10.0) if enable_mip else 0.0
 
         st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
         st.markdown("<div class='rq-side-title'>AI Briefing</div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
 
         provider_options = get_supported_providers()
         default_provider = "google" if "google" in provider_options else provider_options[0]
@@ -655,104 +333,29 @@ def main() -> None:
             f"{_format_provider_label(selected_provider)} API Key", 
             type="password", 
             placeholder="Optional (uses default if empty)",
-            help="Provide your own API key to bypass the default rate limits."
         )
         active_model = custom_model.strip() or selected_model
 
-        st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-title'>Network Builder</div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
-
-    effective_theme_mode = "light"
-    _apply_ui_theme(effective_theme_mode)
+    _apply_ui_theme("light")
     is_dark_mode = False
 
     # ── Load data ─────────────────────────────────────────────────────────
-    base_routes_df, _, _ = load_scenario(str(DATA_FILE_PATH), scenario_name)
+    if uploaded_file is not None:
+        custom_df = pd.read_csv(uploaded_file)
+        base_routes_df, _, _ = load_scenario(custom_df, "custom")
+    else:
+        base_routes_df, _, _ = _cached_load_scenario(str(DATA_FILE_PATH), scenario_name)
+
     supply_df, demand_df, cost_matrix_df = _get_editor_state(scenario_name, base_routes_df)
 
-    # ── Network builder (sidebar, continued) ─────────────────────────────
-    with st.sidebar:
-        with st.expander("Factories", expanded=False):
-            new_factory_name = st.text_input("Name", key=f"new_factory_{scenario_name}", placeholder="Factory name")
-            new_factory_supply = st.number_input(
-                "Supply", min_value=0.0, value=10.0, step=1.0, key=f"new_factory_supply_{scenario_name}"
-            )
-            if st.button("Add factory", key=f"add_factory_{scenario_name}", width="stretch"):
-                clean_name = new_factory_name.strip()
-                if not clean_name:
-                    st.warning("Factory name cannot be empty.")
-                elif clean_name in supply_df["factory"].tolist():
-                    st.warning("Factory already exists.")
-                else:
-                    supply_df = pd.concat(
-                        [supply_df, pd.DataFrame([{"factory": clean_name, "value": float(new_factory_supply)}])],
-                        ignore_index=True,
-                    )
-                    default_cost = float(cost_matrix_df.values.mean()) if not cost_matrix_df.empty else 5.0
-                    cost_matrix_df.loc[clean_name, cost_matrix_df.columns] = default_cost
-                    _save_editor_state(scenario_name, supply_df, demand_df, cost_matrix_df)
-                    st.rerun()
-
-            remove_factory = st.selectbox(
-                "Remove", options=["—"] + sorted(supply_df["factory"].tolist()),
-                key=f"remove_factory_{scenario_name}",
-            )
-            if st.button("Remove factory", key=f"remove_factory_btn_{scenario_name}", width="stretch"):
-                if remove_factory != "—" and len(supply_df) > 1:
-                    supply_df = supply_df[supply_df["factory"] != remove_factory].reset_index(drop=True)
-                    if remove_factory in cost_matrix_df.index:
-                        cost_matrix_df = cost_matrix_df.drop(index=remove_factory)
-                    _save_editor_state(scenario_name, supply_df, demand_df, cost_matrix_df)
-                    st.rerun()
-                elif len(supply_df) <= 1:
-                    st.warning("At least one factory is required.")
-
-            st.markdown("<div class='rq-side-gap-sm'></div>", unsafe_allow_html=True)
-
-        with st.expander("Warehouses", expanded=False):
-            new_warehouse_name = st.text_input("Name", key=f"new_wh_{scenario_name}", placeholder="Warehouse name")
-            new_warehouse_demand = st.number_input(
-                "Demand", min_value=0.0, value=10.0, step=1.0, key=f"new_wh_demand_{scenario_name}"
-            )
-            if st.button("Add warehouse", key=f"add_warehouse_{scenario_name}", width="stretch"):
-                clean_name = new_warehouse_name.strip()
-                if not clean_name:
-                    st.warning("Warehouse name cannot be empty.")
-                elif clean_name in demand_df["warehouse"].tolist():
-                    st.warning("Warehouse already exists.")
-                else:
-                    demand_df = pd.concat(
-                        [demand_df, pd.DataFrame([{"warehouse": clean_name, "value": float(new_warehouse_demand)}])],
-                        ignore_index=True,
-                    )
-                    default_cost = float(cost_matrix_df.values.mean()) if not cost_matrix_df.empty else 5.0
-                    cost_matrix_df[clean_name] = default_cost
-                    _save_editor_state(scenario_name, supply_df, demand_df, cost_matrix_df)
-                    st.rerun()
-
-            remove_warehouse = st.selectbox(
-                "Remove", options=["—"] + sorted(demand_df["warehouse"].tolist()),
-                key=f"remove_wh_{scenario_name}",
-            )
-            if st.button("Remove warehouse", key=f"remove_wh_btn_{scenario_name}", width="stretch"):
-                if remove_warehouse != "—" and len(demand_df) > 1:
-                    demand_df = demand_df[demand_df["warehouse"] != remove_warehouse].reset_index(drop=True)
-                    if remove_warehouse in cost_matrix_df.columns:
-                        cost_matrix_df = cost_matrix_df.drop(columns=remove_warehouse)
-                    _save_editor_state(scenario_name, supply_df, demand_df, cost_matrix_df)
-                    st.rerun()
-                elif len(demand_df) <= 1:
-                    st.warning("At least one warehouse is required.")
-
-    # ── Page header ───────────────────────────────────────────────────────
+    # ── Page Header ───────────────────────────────────────────────────────
     st.markdown("<div class='rq-title'>RouteIQ</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='rq-subtitle'>Multi-scenario transportation optimizer — what-if analysis, network visualization, AI briefing</div>",
+        "<div class='rq-subtitle'>Multi-scenario transportation optimizer — ESG Carbon analytics, Monte Carlo simulation, AI briefing</div>",
         unsafe_allow_html=True,
     )
 
-    # ── Editable network inputs ───────────────────────────────────────────
+    # ── Editable Network Inputs ───────────────────────────────────────────
     st.markdown("<p class='rq-section'>Network Inputs</p>", unsafe_allow_html=True)
 
     factory_list = supply_df["factory"].tolist()
@@ -798,15 +401,26 @@ def main() -> None:
 
     st.markdown("<hr class='rq-divider'>", unsafe_allow_html=True)
 
-    # ── Run / fetch results ───────────────────────────────────────────────
+    # ── Run / Fetch Results ───────────────────────────────────────────────
     if should_run:
-        routes_df, supply, demand = _to_optimizer_inputs(supply_df, demand_df, cost_matrix_df)
-        if cost_multiplier != 1.0:
-            routes_df = routes_df.copy()
-            routes_df["cost"] = routes_df["cost"] * cost_multiplier
-
         try:
-            result_df, summary = solve_transportation(routes_df, supply, demand)
+            routes_df, supply, demand = _to_optimizer_inputs(supply_df, demand_df, cost_matrix_df)
+            if cost_multiplier != 1.0:
+                routes_df = routes_df.copy()
+                routes_df["cost"] = routes_df["cost"] * cost_multiplier
+
+            result_df, summary = solve_transportation(
+                routes_df,
+                supply,
+                demand,
+                solver_type=selected_solver,
+                enable_mip=enable_mip,
+                fixed_lane_cost=fixed_lane_cost,
+            )
+
+            # Calculate ESG carbon emissions
+            result_df = calculate_carbon_emissions(result_df)
+            summary["total_co2_kg"] = float(result_df["co2_emissions_kg"].sum())
         except (RuntimeError, ValueError) as error:
             st.error(f"Optimization failed: {error}")
             return
@@ -837,6 +451,16 @@ def main() -> None:
         }
         st.session_state[results_key] = result_state
 
+        if "history" not in st.session_state:
+            st.session_state["history"] = []
+        st.session_state["history"].append({
+            "scenario": scenario_name,
+            "total_cost": summary["total_cost"],
+            "total_co2_kg": summary.get("total_co2_kg", 0.0),
+            "multiplier": cost_multiplier,
+            "mip_enabled": enable_mip,
+        })
+
     elif result_state is None:
         st.info("Adjust inputs above, then click **▶ Run optimization** in the sidebar.")
         return
@@ -849,74 +473,102 @@ def main() -> None:
     result_df = result_state["result_df"]
     summary   = result_state["summary"]
 
-    # ── Key metrics ───────────────────────────────────────────────────────
-    st.markdown("<p class='rq-section'>Key Metrics</p>", unsafe_allow_html=True)
-    metric_col_1, metric_col_2, metric_col_3 = st.columns(3, gap="medium")
+    # ── Key Metrics ───────────────────────────────────────────────────────
+    st.markdown("<p class='rq-section'>Key Metrics & ESG Impact</p>", unsafe_allow_html=True)
+    metric_col_1, metric_col_2, metric_col_3, metric_col_4 = st.columns(4, gap="medium")
 
     with metric_col_1:
-        st.metric("Total Transportation Cost", f"{summary['total_cost']:,.2f}")
+        st.metric("Total Transportation Cost", f"${summary['total_cost']:,.2f}")
     with metric_col_2:
-        most_utilized_factory, utilization_value = max(
-            summary["factory_utilization"].items(), key=lambda item: item[1]
-        )
+        if summary["factory_utilization"]:
+            most_utilized_factory, utilization_value = max(
+                summary["factory_utilization"].items(), key=lambda item: item[1]
+            )
+        else:
+            most_utilized_factory, utilization_value = "N/A", 0.0
         st.metric("Top Factory Utilization", f"{most_utilized_factory}", delta=f"{utilization_value:.1%} utilized")
     with metric_col_3:
         fully_filled = all(ratio >= 1.0 for ratio in summary["warehouse_fill_ratio"].values())
         st.metric("Demand Coverage", "100%" if fully_filled else "< 100%")
+    with metric_col_4:
+        total_co2 = summary.get("total_co2_kg", 0.0)
+        st.metric("Est. CO2 Emissions", f"{total_co2:,.1f} kg")
 
-    # ── Charts ────────────────────────────────────────────────────────────
+    # ── Visualizations ────────────────────────────────────────────────────
     st.markdown("<p class='rq-section' style='margin-top:1.6rem'>Visualizations</p>", unsafe_allow_html=True)
     chart_col_1, chart_col_2 = st.columns(2, gap="medium")
 
-    with chart_col_1:
-        st.markdown("<p class='rq-table-label'>Network Flow</p>", unsafe_allow_html=True)
-        figure_network, axis_network = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
-        plot_network(
-            result_df,
-            title=f"{scenario_name.replace('_', ' ').title()} — Network Flow",
-            axis=axis_network,
-            dark_mode=is_dark_mode,
-        )
-        st.image(_figure_to_png_bytes(figure_network), width="stretch")
-        plt.close(figure_network)
+    if use_plotly:
+        with chart_col_1:
+            st.plotly_chart(plot_network_plotly(result_df, title="Interactive Network Flow"), use_container_width=True)
+        with chart_col_2:
+            st.plotly_chart(plot_cost_heatmap_plotly(routes_df, title="Interactive Cost Heatmap"), use_container_width=True)
+    else:
+        with chart_col_1:
+            st.markdown("<p class='rq-table-label'>Network Flow</p>", unsafe_allow_html=True)
+            figure_network, axis_network = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
+            plot_network(
+                result_df,
+                title=f"{scenario_name.replace('_', ' ').title()} — Network Flow",
+                axis=axis_network,
+                dark_mode=is_dark_mode,
+            )
+            st.image(_figure_to_png_bytes(figure_network), use_container_width=True)
+            plt.close(figure_network)
 
-    with chart_col_2:
-        st.markdown("<p class='rq-table-label'>Cost Heatmap</p>", unsafe_allow_html=True)
-        figure_heatmap, axis_heatmap = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
-        plot_cost_heatmap(
-            routes_df,
-            title=f"{scenario_name.replace('_', ' ').title()} — Cost Heatmap",
-            axis=axis_heatmap,
-            dark_mode=is_dark_mode,
-        )
-        st.image(_figure_to_png_bytes(figure_heatmap), width="stretch")
-        plt.close(figure_heatmap)
+        with chart_col_2:
+            st.markdown("<p class='rq-table-label'>Cost Heatmap</p>", unsafe_allow_html=True)
+            figure_heatmap, axis_heatmap = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
+            plot_cost_heatmap(
+                routes_df,
+                title=f"{scenario_name.replace('_', ' ').title()} — Cost Heatmap",
+                axis=axis_heatmap,
+                dark_mode=is_dark_mode,
+            )
+            st.image(_figure_to_png_bytes(figure_heatmap), use_container_width=True)
+            plt.close(figure_heatmap)
 
-    # ── AI Briefing ───────────────────────────────────────────────────────
-    st.markdown("<p class='rq-section' style='margin-top:1.6rem'>AI Executive Briefing</p>", unsafe_allow_html=True)
+    # ── AI Briefing & Exports ─────────────────────────────────────────────
+    st.markdown("<p class='rq-section' style='margin-top:1.6rem'>AI Executive Briefing & Export Reports</p>", unsafe_allow_html=True)
     if result_state["briefing_text"]:
         st.write(result_state["briefing_text"])
+        
+        btn_col1, btn_col2, _ = st.columns([0.25, 0.25, 0.5])
+        with btn_col1:
+            pdf_bytes = generate_pdf_report(summary, scenario_name, result_state["briefing_text"], result_df)
+            st.download_button(
+                "📄 Download Executive PDF",
+                data=pdf_bytes,
+                file_name=f"RouteIQ_{scenario_name}_report.pdf",
+                mime="application/pdf",
+            )
+        with btn_col2:
+            excel_bytes = generate_excel_report(summary, scenario_name, result_df)
+            st.download_button(
+                "📊 Download Excel Dataset",
+                data=excel_bytes,
+                file_name=f"RouteIQ_{scenario_name}_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
     else:
         st.warning(f"Briefing unavailable — {result_state['briefing_error']}")
 
-    # ── Debug expander ────────────────────────────────────────────────────
-    with st.expander("Optimization outputs"):
-        out_col1, out_col2 = st.columns(2, gap="medium")
-        with out_col1:
-            st.markdown("<p class='rq-table-label'>Factory Supply</p>", unsafe_allow_html=True)
-            st.json(supply)
-        with out_col2:
-            st.markdown("<p class='rq-table-label'>Warehouse Demand</p>", unsafe_allow_html=True)
-            st.json(demand)
-        st.markdown("<p class='rq-table-label' style='margin-top:0.8rem'>Optimized Route Flows</p>", unsafe_allow_html=True)
-        _, output_table_col, _ = st.columns([0.06, 0.88, 0.06])
-        with output_table_col:
-            _render_centered_grid(
-                result_df,
-                key=f"optimized_output_{scenario_name}",
-                editable=False,
-            )
+    # ── Monte Carlo & Advanced Analytics Expander ─────────────────────────
+    with st.expander("Stochastic Monte Carlo Risk Analysis"):
+        st.markdown("Simulate random demand fluctuations to test network resilience.")
+        mc_runs = st.slider("Simulation Runs", 10, 100, 30, 10)
+        demand_std = st.slider("Demand Std Dev (%)", 0.05, 0.30, 0.15, 0.05)
+        if st.button("Run Monte Carlo Risk Simulation"):
+            with st.spinner("Running stochastic LP simulations..."):
+                mc_df = run_monte_carlo_simulation(routes_df, supply, demand, n_simulations=mc_runs, demand_std_dev_pct=demand_std)
+                st.dataframe(mc_df, use_container_width=True)
+                st.success(f"Completed {mc_runs} simulations. Avg Cost: ${mc_df['total_cost'].mean():,.2f}")
 
+    # ── Scenario History Expander ──────────────────────────────────────────
+    if "history" in st.session_state and st.session_state["history"]:
+        with st.expander("Run History & Scenario Comparison"):
+            history_df = pd.DataFrame(st.session_state["history"])
+            st.dataframe(history_df, use_container_width=True)
 
 if __name__ == "__main__":
     main()
