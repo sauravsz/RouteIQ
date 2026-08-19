@@ -72,28 +72,29 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
     }
 
     /* Global Page & Container Base */
-    html, body, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"], [data-testid="stHeader"] {
+    html, body, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
         background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
         font-family: var(--rq-font-primary) !important;
     }
 
-    header[data-testid="stHeader"] {
+    /* Top Header Bar & Toolbar Overrides (eliminates dark top bar) */
+    header[data-testid="stHeader"], [data-testid="stHeader"], [data-testid="stToolbar"], .stAppHeader, div[data-testid="stDecoration"] {
         background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
-    }
-
-    [data-testid="stToolbar"] {
-        background-color: var(--rq-bg) !important;
         color: var(--rq-text) !important;
     }
 
-    /* Sidebar Styling */
-    [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
+    /* Sidebar & all inner elements (eliminates dark sidebar) */
+    section[data-testid="stSidebar"], [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], [data-testid="stSidebarNav"] {
         background-color: var(--rq-sidebar) !important;
         background: var(--rq-sidebar) !important;
         border-right: 1px solid var(--rq-border) !important;
+    }
+
+    [data-testid="stSidebar"] * {
+        color: var(--rq-text) !important;
     }
 
     [data-testid="stSidebar"] * {
@@ -477,6 +478,8 @@ def _format_provider_label(provider: str) -> str:
 
 def main() -> None:
     st.set_page_config(page_title="RouteIQ", layout="wide", page_icon="🔀")
+    _apply_ui_theme("lovable")
+    is_dark_mode = False
 
     # ── Sidebar ──────────────────────────────────────────────────────────
     with st.sidebar:
@@ -550,9 +553,6 @@ def main() -> None:
             placeholder="Optional (uses default if empty)",
         )
         active_model = custom_model.strip() or selected_model
-
-    _apply_ui_theme("lovable")
-    is_dark_mode = False
 
     # ── Load data ─────────────────────────────────────────────────────────
     if uploaded_file is not None:
