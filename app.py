@@ -71,15 +71,27 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         --gdg-font-family: 'Sora', sans-serif !important;
     }
 
-    /* Global Page Base */
-    .stApp {
+    /* Global Page & Container Base */
+    html, body, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"], [data-testid="stHeader"] {
+        background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
         font-family: var(--rq-font-primary) !important;
     }
 
+    header[data-testid="stHeader"] {
+        background-color: var(--rq-bg) !important;
+        background: var(--rq-bg) !important;
+    }
+
+    [data-testid="stToolbar"] {
+        background-color: var(--rq-bg) !important;
+        color: var(--rq-text) !important;
+    }
+
     /* Sidebar Styling */
-    [data-testid="stSidebar"] {
+    [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
+        background-color: var(--rq-sidebar) !important;
         background: var(--rq-sidebar) !important;
         border-right: 1px solid var(--rq-border) !important;
     }
@@ -196,8 +208,8 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         background-color: rgba(28, 28, 28, 0.04) !important;
     }
 
-    /* Inputs, Selectboxes, Textareas per DESIGN.md */
-    input[type="text"], input[type="number"], input[type="password"], textarea, [data-baseweb="select"] > div {
+    /* Inputs, Selectboxes, Dropdowns, Textareas per DESIGN.md */
+    input[type="text"], input[type="number"], input[type="password"], textarea, [data-baseweb="select"] > div, [data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
         background-color: var(--rq-bg) !important;
         color: var(--rq-text) !important;
         border: 1px solid var(--rq-border) !important;
@@ -205,9 +217,13 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         font-family: var(--rq-font-primary) !important;
     }
 
-    input:focus, textarea:focus, [data-baseweb="select"]:focus {
-        border-color: var(--rq-border-interactive) !important;
-        box-shadow: rgba(0,0,0,0.1) 0px 4px 12px !important;
+    [data-baseweb="menu"] li, [role="option"] {
+        background-color: var(--rq-bg) !important;
+        color: var(--rq-text) !important;
+    }
+
+    [data-baseweb="menu"] li:hover, [role="option"]:hover {
+        background-color: #f2eee5 !important;
     }
 
     /* File Uploader styling */
@@ -222,6 +238,7 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
     .stTabs [data-baseweb="tab-list"] {
         gap: 1.5rem;
         border-bottom: 1px solid var(--rq-border);
+        background: transparent !important;
     }
 
     .stTabs [data-baseweb="tab"] {
@@ -229,6 +246,7 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         font-weight: 400 !important;
         font-size: 1rem !important;
         font-family: var(--rq-font-primary) !important;
+        background: transparent !important;
     }
 
     .stTabs [aria-selected="true"] {
@@ -237,8 +255,8 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         border-bottom: 2px solid var(--rq-text) !important;
     }
 
-    /* Expanders per DESIGN.md */
-    [data-testid="stExpander"] {
+    /* Expanders & Forms per DESIGN.md */
+    [data-testid="stExpander"], [data-testid="stForm"] {
         background-color: var(--rq-bg) !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
@@ -246,10 +264,11 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
     }
 
     /* Dataframe / Data Editor Table overrides */
-    [data-testid="stDataFrame"] {
+    [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
         overflow: hidden !important;
+        background-color: var(--rq-bg) !important;
     }
 
     .rq-table-label {
