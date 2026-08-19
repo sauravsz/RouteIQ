@@ -678,16 +678,15 @@ def main() -> None:
             unsafe_allow_html=True,
         )
     with head_col2:
-        st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
-        current_idx = ["Lovable Cream", "Dark Mode", "Clean Light"].index(theme_choice) if theme_choice in ["Lovable Cream", "Dark Mode", "Clean Light"] else 0
-        new_theme = st.selectbox(
+        st.markdown("<div style='height: 0.4rem;'></div>", unsafe_allow_html=True)
+        new_theme = st.segmented_control(
             "Theme Mode",
-            ["Lovable Cream", "Dark Mode", "Clean Light"],
-            index=current_idx,
+            options=["Lovable Cream", "Dark Mode", "Clean Light"],
+            default=theme_choice,
             key="ui_theme_selector",
             label_visibility="collapsed",
         )
-        if new_theme != theme_choice:
+        if new_theme and new_theme != theme_choice:
             st.rerun()
 
     main_tab_trans, main_tab_assign = st.tabs([
@@ -785,6 +784,7 @@ def main() -> None:
                 display_df,
                 key=f"{matrix_key}_{version}",
                 num_rows="fixed",
+                hide_index=True,
                 use_container_width=True,
                 column_config={
                     "Factory": st.column_config.TextColumn("Factory", disabled=True),
@@ -1051,6 +1051,7 @@ def main() -> None:
                 assign_matrix_df,
                 key=f"{asgn_matrix_key}_{asgn_version}",
                 num_rows="fixed",
+                hide_index=True,
                 use_container_width=True,
                 column_config={
                     "Agent": st.column_config.TextColumn("Agent (Worker/Machine)", disabled=True),
