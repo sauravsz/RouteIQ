@@ -375,12 +375,12 @@ def main() -> None:
     with tab_add:
         ac1, ac2 = st.columns(2, gap="medium")
         with ac1:
-            new_factory = st.text_input("Factory name", key=f"new_f_{scenario_name}", placeholder="e.g. F4")
-            if st.button("Add factory", key=f"add_f_{scenario_name}", use_container_width=True):
-                name = (new_factory or "").strip()
-                if not name:
-                    st.warning("Enter a name.")
-                elif name in matrix_df["Factory"].values:
+            with st.form(key=f"form_add_f_{scenario_name}", clear_on_submit=True):
+                new_factory = st.text_input("Factory name", placeholder="e.g. F4")
+                submitted_f = st.form_submit_button("Add factory", use_container_width=True)
+            if submitted_f and (new_factory or "").strip():
+                name = new_factory.strip()
+                if name in matrix_df["Factory"].values:
                     st.warning(f"'{name}' already exists.")
                 else:
                     default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
@@ -394,12 +394,12 @@ def main() -> None:
                     st.session_state[f"{state_key}_v"] = version + 1
                     st.rerun()
         with ac2:
-            new_warehouse = st.text_input("Warehouse name", key=f"new_wh_{scenario_name}", placeholder="e.g. W5")
-            if st.button("Add warehouse", key=f"add_wh_{scenario_name}", use_container_width=True):
-                name = (new_warehouse or "").strip()
-                if not name:
-                    st.warning("Enter a name.")
-                elif name in matrix_df.columns:
+            with st.form(key=f"form_add_wh_{scenario_name}", clear_on_submit=True):
+                new_warehouse = st.text_input("Warehouse name", placeholder="e.g. W5")
+                submitted_w = st.form_submit_button("Add warehouse", use_container_width=True)
+            if submitted_w and (new_warehouse or "").strip():
+                name = new_warehouse.strip()
+                if name in matrix_df.columns:
                     st.warning(f"'{name}' already exists.")
                 else:
                     default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
