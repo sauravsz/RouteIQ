@@ -363,7 +363,7 @@ def main() -> None:
 
     # ── Editable Network Inputs ───────────────────────────────────────────
     st.markdown("<p class='rq-section'>Network Inputs</p>", unsafe_allow_html=True)
-    st.caption("Edit costs, Supply column and Demand row directly. Add rows for factories, use **+ Add column** for warehouses. Last row must be named Demand.")
+    st.caption("Edit costs, Supply and Demand directly. Use **+ / −** below the table to add or remove factories (rows) and warehouses (columns). Last row is Demand.")
 
     matrix_key = f"matrix_editor_{scenario_name}"
     state_key = f"matrix_state_{scenario_name}"
@@ -383,14 +383,15 @@ def main() -> None:
             },
         )
 
-        add_col_1, add_col_2, _ = st.columns([0.3, 0.15, 0.55])
-        with add_col_1:
-            new_warehouse = st.text_input("New warehouse name", key=f"new_wh_{scenario_name}", placeholder="e.g. W4", label_visibility="collapsed")
-        with add_col_2:
-            if st.button("Add warehouse", key=f"add_wh_{scenario_name}") and new_warehouse.strip():
+        wh_add_col, wh_add_btn, wh_rm_col, wh_rm_btn = st.columns([0.25, 0.12, 0.25, 0.12], gap="small")
+        warehouse_cols = [c for c in edited.columns if c not in ("Factory", "Supply")]
+        with wh_add_col:
+            new_warehouse = st.text_input("Add warehouse", key=f"new_wh_{scenario_name}", placeholder="e.g. W4", label_visibility="collapsed")
+        with wh_add_btn:
+            if st.button("➕ Add", key=f"add_wh_{scenario_name}") and new_warehouse.strip():
                 name = new_warehouse.strip()
                 if name in edited.columns:
-                    st.warning(f"Column {name} already exists.")
+                    st.warning(f"Column '{name}' already exists.")
                 else:
                     default_cost = float(edited.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
                     updated = edited.copy()
@@ -398,6 +399,17 @@ def main() -> None:
                     demand_mask = updated["Factory"].astype(str).str.lower() == "demand"
                     updated.loc[~demand_mask, name] = default_cost
                     updated.loc[demand_mask, name] = 0.0
+                    st.session_state[state_key] = updated
+                    st.session_state[f"{state_key}_v"] = version + 1
+                    st.rerun()
+        with wh_rm_col:
+            rm_warehouse = st.selectbox("Remove warehouse", options=warehouse_cols, index=None, key=f"rm_wh_{scenario_name}", placeholder="Select...", label_visibility="collapsed")
+        with wh_rm_btn:
+            if st.button("➖ Remove", key=f"rm_wh_{scenario_name}_btn") and rm_warehouse:
+                if len(warehouse_cols) <= 1:
+                    st.warning("Cannot remove the last warehouse.")
+                else:
+                    updated = edited.drop(columns=[rm_warehouse])
                     st.session_state[state_key] = updated
                     st.session_state[f"{state_key}_v"] = version + 1
                     st.rerun()
