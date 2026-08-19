@@ -45,61 +45,64 @@ def _cached_load_scenario(data_path_str: str, scenario_name: str):
 def _apply_ui_theme(theme_mode: str = "lovable") -> None:
     css = """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 
     :root {
         --rq-bg: #f7f4ed;
         --rq-sidebar: #f2eee5;
         --rq-text: #1c1c1c;
-        --rq-muted: #5f5f5d;
+        --rq-text-muted: #5f5f5d;
         --rq-border: #eceae4;
         --rq-border-interactive: rgba(28, 28, 28, 0.4);
         --rq-panel: #f7f4ed;
+        --rq-font-primary: 'Sora', ui-sans-serif, system-ui, -apple-system, sans-serif;
     }
 
+    /* Global Page Base */
     .stApp {
         background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
-        font-family: 'Sora', sans-serif;
+        font-family: var(--rq-font-primary) !important;
     }
 
+    /* Sidebar Styling */
     [data-testid="stSidebar"] {
         background: var(--rq-sidebar) !important;
         border-right: 1px solid var(--rq-border) !important;
     }
 
+    [data-testid="stSidebar"] * {
+        color: var(--rq-text) !important;
+    }
+
+    /* Typography Hierarchy per DESIGN.md */
     .rq-title {
         font-family: 'DM Serif Display', serif;
-        font-size: 2.5rem;
-        font-weight: 400;
-        letter-spacing: -0.04em;
+        font-size: 3.2rem;
+        font-weight: 600;
+        letter-spacing: -1.5px;
         color: #1c1c1c;
-        line-height: 1.1;
-        margin-bottom: 0.2rem;
+        line-height: 1.05;
+        margin-bottom: 0.3rem;
     }
 
     .rq-subtitle {
-        font-family: 'Sora', sans-serif;
-        font-size: 0.9rem;
-        color: var(--rq-muted);
-        margin-bottom: 1.6rem;
-        letter-spacing: -0.01em;
+        font-family: var(--rq-font-primary);
+        font-size: 1.125rem;
+        font-weight: 400;
+        color: var(--rq-text-muted);
+        margin-bottom: 2rem;
+        line-height: 1.38;
     }
 
     .rq-section {
-        font-family: 'Sora', sans-serif !important;
-        font-size: 0.76rem !important;
+        font-family: var(--rq-font-primary) !important;
+        font-size: 0.875rem !important;
         font-weight: 600 !important;
-        letter-spacing: 0.05em !important;
+        letter-spacing: -0.01em !important;
         text-transform: uppercase !important;
-        color: #1c1c1c !important;
+        color: var(--rq-text) !important;
         margin-bottom: 0.8rem;
-    }
-
-    .rq-divider {
-        border: none;
-        border-top: 1px solid var(--rq-border);
-        margin: 1.2rem 0;
     }
 
     .rq-side-title {
@@ -107,60 +110,123 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         font-weight: 600;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: #1c1c1c;
+        color: var(--rq-text);
         margin-top: 0;
         margin-bottom: 0.42rem;
         line-height: 1.2;
     }
 
+    .rq-divider {
+        border: none;
+        border-top: 1px solid var(--rq-border);
+        margin: 1.5rem 0;
+    }
+
+    /* Metrics & Cards per DESIGN.md */
     [data-testid="stMetric"] {
         background: var(--rq-panel) !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
-        padding: 1rem 1.2rem !important;
+        padding: 1.2rem 1.4rem !important;
         box-shadow: none !important;
     }
 
-    [data-testid="stMetricValue"] > div {
-        color: #1c1c1c !important;
-        font-weight: 600 !important;
+    [data-testid="stMetricLabel"] p {
+        color: var(--rq-text-muted) !important;
+        font-size: 0.875rem !important;
+        font-weight: 400 !important;
     }
 
+    [data-testid="stMetricValue"] > div {
+        color: var(--rq-text) !important;
+        font-size: 2rem !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.9px !important;
+    }
+
+    /* Primary Dark Buttons with Lovable Inset Shadow */
     .stButton > button {
         background-color: #1c1c1c !important;
         color: #fcfbf8 !important;
         border-radius: 6px !important;
         padding: 8px 16px !important;
         border: none !important;
+        font-family: var(--rq-font-primary) !important;
+        font-size: 1rem !important;
+        font-weight: 400 !important;
         box-shadow: rgba(255,255,255,0.2) 0px 0.5px 0px 0px inset, rgba(0,0,0,0.2) 0px 0px 0px 0.5px inset, rgba(0,0,0,0.05) 0px 1px 2px 0px !important;
-        font-weight: 500 !important;
         transition: opacity 0.15s ease !important;
     }
 
     .stButton > button:hover {
-        opacity: 0.9 !important;
+        opacity: 0.85 !important;
         color: #ffffff !important;
     }
 
+    .stButton > button:focus {
+        box-shadow: rgba(0,0,0,0.1) 0px 4px 12px !important;
+    }
+
+    /* Download Buttons & Secondary Outline Buttons */
+    .stDownloadButton > button {
+        background-color: transparent !important;
+        color: #1c1c1c !important;
+        border: 1px solid var(--rq-border-interactive) !important;
+        border-radius: 6px !important;
+        padding: 8px 16px !important;
+        font-family: var(--rq-font-primary) !important;
+        font-size: 0.875rem !important;
+        font-weight: 400 !important;
+    }
+
+    .stDownloadButton > button:hover {
+        background-color: rgba(28, 28, 28, 0.04) !important;
+    }
+
+    /* Inputs, Selectboxes, Textareas per DESIGN.md */
+    input[type="text"], input[type="number"], input[type="password"], textarea, [data-baseweb="select"] > div {
+        background-color: var(--rq-bg) !important;
+        color: var(--rq-text) !important;
+        border: 1px solid var(--rq-border) !important;
+        border-radius: 6px !important;
+        font-family: var(--rq-font-primary) !important;
+    }
+
+    input:focus, textarea:focus, [data-baseweb="select"]:focus {
+        border-color: var(--rq-border-interactive) !important;
+        box-shadow: rgba(0,0,0,0.1) 0px 4px 12px !important;
+    }
+
+    /* Tabs per DESIGN.md */
     .stTabs [data-baseweb="tab-list"] {
         gap: 1.5rem;
         border-bottom: 1px solid var(--rq-border);
     }
 
     .stTabs [data-baseweb="tab"] {
-        color: var(--rq-muted) !important;
-        font-weight: 500 !important;
-        font-family: 'Sora', sans-serif !important;
+        color: var(--rq-text-muted) !important;
+        font-weight: 400 !important;
+        font-size: 1rem !important;
+        font-family: var(--rq-font-primary) !important;
     }
 
     .stTabs [aria-selected="true"] {
-        color: #1c1c1c !important;
-        border-bottom: 2px solid #1c1c1c !important;
+        color: var(--rq-text) !important;
+        font-weight: 600 !important;
+        border-bottom: 2px solid var(--rq-text) !important;
+    }
+
+    /* Expanders per DESIGN.md */
+    [data-testid="stExpander"] {
+        background-color: var(--rq-bg) !important;
+        border: 1px solid var(--rq-border) !important;
+        border-radius: 12px !important;
+        box-shadow: none !important;
     }
 
     .rq-table-label {
-        font-family: 'Sora', sans-serif;
-        font-size: 0.82rem;
+        font-family: var(--rq-font-primary);
+        font-size: 0.875rem;
         font-weight: 600;
         color: var(--rq-text);
         margin-bottom: 0.4rem;
