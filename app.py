@@ -201,6 +201,19 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
         transition: opacity 0.15s ease !important;
     }}
 
+    /* Sidebar Collapse & Header Icon Buttons Override (removes black box around icons) */
+    [data-testid="stSidebarCollapseButton"] button, [data-testid="stSidebarHeader"] button, [data-testid="stSidebarCollapseButton"] *, [data-testid="stHeader"] button, [data-testid="stSidebarNav"] button {{
+        background-color: transparent !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: var(--rq-text) !important;
+    }}
+
+    [data-testid="stSidebarCollapseButton"] button:hover, [data-testid="stSidebarHeader"] button:hover {{
+        background-color: rgba(28, 28, 28, 0.08) !important;
+    }}
+
     .stButton > button:hover {{
         opacity: 0.85 !important;
         color: #ffffff !important;
