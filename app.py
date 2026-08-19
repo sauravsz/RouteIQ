@@ -97,10 +97,6 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         color: var(--rq-text) !important;
     }
 
-    [data-testid="stSidebar"] * {
-        color: var(--rq-text) !important;
-    }
-
     /* Typography Hierarchy per DESIGN.md */
     .rq-title {
         font-family: 'DM Serif Display', serif;
@@ -209,6 +205,20 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         background-color: rgba(28, 28, 28, 0.04) !important;
     }
 
+    /* File Uploader Dropzone Overrides */
+    [data-testid="stFileUploader"], [data-testid="stFileUploaderDropzone"], section[data-testid="stFileUploaderDropzone"], div[data-testid="stFileUploaderDropzone"] {
+        background-color: var(--rq-sidebar) !important;
+        background: var(--rq-sidebar) !important;
+        border: 1px dashed var(--rq-border-interactive) !important;
+        border-radius: 12px !important;
+        color: var(--rq-text) !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"] * {
+        color: var(--rq-text) !important;
+        background-color: transparent !important;
+    }
+
     /* Inputs, Selectboxes, Dropdowns, Textareas per DESIGN.md */
     input[type="text"], input[type="number"], input[type="password"], textarea, [data-baseweb="select"] > div, [data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
         background-color: var(--rq-bg) !important;
@@ -216,6 +226,11 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         border: 1px solid var(--rq-border) !important;
         border-radius: 6px !important;
         font-family: var(--rq-font-primary) !important;
+    }
+
+    [data-testid="stSidebar"] div[data-baseweb="select"] > div {
+        background-color: var(--rq-sidebar) !important;
+        border: 1px solid var(--rq-border) !important;
     }
 
     [data-baseweb="menu"] li, [role="option"] {
@@ -227,12 +242,13 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         background-color: #f2eee5 !important;
     }
 
-    /* File Uploader styling */
-    [data-testid="stFileUploader"] {
-        background-color: var(--rq-sidebar) !important;
-        border: 1px dashed var(--rq-border-interactive) !important;
-        border-radius: 12px !important;
-        padding: 1rem !important;
+    /* Sliders & Toggles */
+    [data-testid="stSlider"] * {
+        color: var(--rq-text) !important;
+    }
+
+    div[data-baseweb="slider"] div {
+        background-color: var(--rq-text) !important;
     }
 
     /* Tabs per DESIGN.md */
@@ -257,11 +273,17 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
     }
 
     /* Expanders & Forms per DESIGN.md */
-    [data-testid="stExpander"], [data-testid="stForm"] {
+    [data-testid="stExpander"], summary[data-testid="stExpanderToggleHeader"], div[data-testid="stExpanderDetails"], [data-testid="stForm"] {
         background-color: var(--rq-bg) !important;
+        background: var(--rq-bg) !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
+        color: var(--rq-text) !important;
         box-shadow: none !important;
+    }
+
+    summary[data-testid="stExpanderToggleHeader"] * {
+        color: var(--rq-text) !important;
     }
 
     /* Dataframe / Data Editor Table overrides */
@@ -270,6 +292,22 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         border-radius: 12px !important;
         overflow: hidden !important;
         background-color: var(--rq-bg) !important;
+    }
+
+    /* Alerts (success, info, warning, error) */
+    [data-testid="stNotification"], div[data-baseweb="notification"], .stAlert {
+        background-color: #f2eee5 !important;
+        border: 1px solid var(--rq-border) !important;
+        color: var(--rq-text) !important;
+        border-radius: 8px !important;
+    }
+
+    /* Code Blocks */
+    .stCodeBlock, [data-testid="stCodeBlock"] pre {
+        background-color: #f2eee5 !important;
+        border: 1px solid var(--rq-border) !important;
+        border-radius: 8px !important;
+        color: var(--rq-text) !important;
     }
 
     .rq-table-label {
@@ -286,7 +324,6 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
-
 def _figure_to_png_bytes(figure: plt.Figure) -> bytes:
     buffer = BytesIO()
     figure.savefig(buffer, format="png", dpi=170, bbox_inches="tight", facecolor=figure.get_facecolor())
