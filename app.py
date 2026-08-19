@@ -6,13 +6,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import List, Optional
 
-try:
-    from st_aggrid import AgGrid, GridUpdateMode
-    HAS_AGGRID = True
-except ImportError:
-    HAS_AGGRID = False
-
 from src.ai_explainer import (
+    extract_matrix_from_image,
     generate_executive_briefing,
     get_provider_default_model,
     get_provider_model_options,
@@ -27,8 +22,6 @@ from src.visualizations import (
     plot_network_plotly,
 )
 from src.features import (
-    calculate_carbon_emissions,
-    run_monte_carlo_simulation,
     generate_pdf_report,
     generate_excel_report,
 )
@@ -151,74 +144,54 @@ def _figure_to_png_bytes(figure: plt.Figure) -> bytes:
     buffer.seek(0)
     return buffer.getvalue()
 
-def _build_state_from_routes(routes_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    supply_df = (
-        routes_df.groupby("factory", as_index=False)["supply"].max().rename(columns={"supply": "value"})
-    )
-    demand_df = (
-        routes_df.groupby("warehouse", as_index=False)["demand"].max().rename(columns={"demand": "value"})
-    )
-    cost_matrix_df = routes_df.pivot(index="factory", columns="warehouse", values="cost").sort_index()
-    return supply_df, demand_df, cost_matrix_df
+DEMAND_ROW = "Demand"
 
-def _get_editor_state(scenario_name: str, routes_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    state_key = f"editor_state_{scenario_name}"
+def _build_matrix_from_routes(routes_df: pd.DataFrame) -> pd.DataFrame:
+    """Unified grid: rows = factories, cols = [Factory, Supply, <warehouses...>], last row = Demand."""
+    supply_map = routes_df.groupby("factory")["supply"].max()
+    demand_map = routes_df.groupby("warehouse")["demand"].max()
+    cost_matrix = routes_df.pivot(index="factory", columns="warehouse", values="cost").sort_index()
+    matrix = cost_matrix.reset_index(names="Factory")
+    matrix.insert(1, "Supply", matrix["Factory"].map(supply_map).astype(float))
+    demand_row = {"Factory": DEMAND_ROW, "Supply": None}
+    demand_row.update({w: float(demand_map[w]) for w in cost_matrix.columns})
+    return pd.concat([matrix, pd.DataFrame([demand_row])], ignore_index=True)
+
+def _get_matrix_state(scenario_name: str, routes_df: pd.DataFrame) -> pd.DataFrame:
+    state_key = f"matrix_state_{scenario_name}"
     if state_key not in st.session_state:
-        supply_df, demand_df, cost_matrix_df = _build_state_from_routes(routes_df)
-        st.session_state[state_key] = {
-            "supply_df": supply_df,
-            "demand_df": demand_df,
-            "cost_matrix_df": cost_matrix_df,
-        }
-    state = st.session_state[state_key]
-    return state["supply_df"], state["demand_df"], state["cost_matrix_df"]
+        st.session_state[state_key] = _build_matrix_from_routes(routes_df)
+    return st.session_state[state_key]
 
-def _save_editor_state(
-    scenario_name: str,
-    supply_df: pd.DataFrame,
-    demand_df: pd.DataFrame,
-    cost_matrix_df: pd.DataFrame,
-) -> None:
-    state_key = f"editor_state_{scenario_name}"
-    st.session_state[state_key] = {
-        "supply_df": supply_df,
-        "demand_df": demand_df,
-        "cost_matrix_df": cost_matrix_df,
-    }
+def _to_optimizer_inputs(matrix_df: pd.DataFrame) -> tuple[pd.DataFrame, dict, dict]:
+    df = matrix_df.copy()
+    df["Factory"] = df["Factory"].astype(str).str.strip()
+    df = df[df["Factory"] != ""]
+    warehouse_cols = [c for c in df.columns if c not in ("Factory", "Supply")]
 
-def _to_optimizer_inputs(
-    supply_df: pd.DataFrame,
-    demand_df: pd.DataFrame,
-    cost_matrix_df: pd.DataFrame,
-) -> tuple[pd.DataFrame, dict, dict]:
-    supply_map = {
-        str(row["factory"]): float(row["value"])
-        for _, row in supply_df.iterrows()
-        if str(row["factory"]).strip()
-    }
-    demand_map = {
-        str(row["warehouse"]): float(row["value"])
-        for _, row in demand_df.iterrows()
-        if str(row["warehouse"]).strip()
-    }
+    demand_mask = df["Factory"].str.lower() == DEMAND_ROW.lower()
+    if not demand_mask.any():
+        raise RuntimeError("Matrix is missing the Demand row.")
+    demand_row = df[demand_mask].iloc[0]
+    factory_df = df[~demand_mask]
+
+    supply_map = {row["Factory"]: float(row["Supply"]) for _, row in factory_df.iterrows()}
+    demand_map = {w: float(demand_row[w]) for w in warehouse_cols}
 
     rows: list[dict] = []
-    for factory, supply_value in supply_map.items():
-        for warehouse, demand_value in demand_map.items():
-            if factory not in cost_matrix_df.index or warehouse not in cost_matrix_df.columns:
-                raise RuntimeError("Cost matrix is missing one or more factory-warehouse routes.")
-            cost_value = float(cost_matrix_df.loc[factory, warehouse])
+    for _, frow in factory_df.iterrows():
+        factory = frow["Factory"]
+        for w in warehouse_cols:
             rows.append({
                 "scenario": "interactive",
                 "factory": factory,
-                "warehouse": warehouse,
-                "supply": supply_value,
-                "demand": demand_value,
-                "cost": cost_value,
+                "warehouse": w,
+                "supply": supply_map[factory],
+                "demand": demand_map[w],
+                "cost": float(frow[w]),
             })
 
-    routes_df = pd.DataFrame(rows)
-    return routes_df, supply_map, demand_map
+    return pd.DataFrame(rows), supply_map, demand_map
 
 def _format_scenario_label(scenario: str) -> str:
     return scenario.replace("_", " ").title()
@@ -232,68 +205,6 @@ def _format_provider_label(provider: str) -> str:
         "google": "Google",
     }
     return labels.get(normalized, provider[:1].upper() + provider[1:])
-
-def _render_centered_grid(
-    frame: pd.DataFrame,
-    key: str,
-    editable: bool,
-    non_editable_cols: Optional[List[str]] = None,
-    height: Optional[int] = None,
-) -> pd.DataFrame:
-    if HAS_AGGRID:
-        frame_for_grid = frame.copy().reset_index(drop=True)
-        frame_for_grid = frame_for_grid[
-            [column for column in frame_for_grid.columns if not str(column).startswith("_")]
-        ]
-        row_count = max(1, len(frame_for_grid.index))
-        computed_height = height if height is not None else min(460, 38 + (row_count * 36))
-        locked_columns = set(non_editable_cols or [])
-        column_defs = [
-            {
-                "field": str(column_name),
-                "editable": editable and str(column_name) not in locked_columns,
-                "sortable": False,
-                "filter": False,
-                "resizable": False,
-                "suppressMenu": True,
-                "flex": 1,
-                "cellStyle": {"textAlign": "center"},
-            }
-            for column_name in frame_for_grid.columns
-        ]
-
-        grid_options = {
-            "columnDefs": column_defs,
-            "defaultColDef": {
-                "editable": editable,
-                "sortable": False,
-                "filter": False,
-                "resizable": False,
-                "suppressMenu": True,
-                "cellStyle": {"textAlign": "center"},
-            },
-            "headerHeight": 36,
-            "rowHeight": 36,
-            "animateRows": False,
-            "suppressHorizontalScroll": True,
-            "ensureDomOrder": True,
-        }
-
-        response = AgGrid(
-            frame_for_grid,
-            gridOptions=grid_options,
-            update_mode=GridUpdateMode.VALUE_CHANGED,
-            fit_columns_on_grid_load=True,
-            allow_unsafe_jscode=False,
-            theme="streamlit",
-            key=key,
-            height=computed_height,
-        )
-        cleaned = pd.DataFrame(response["data"])
-        cleaned = cleaned[[column for column in cleaned.columns if str(column) in frame.columns]]
-        return cleaned
-
-    return frame
 
 def main() -> None:
     st.set_page_config(page_title="RouteIQ", layout="wide", page_icon="🔀")
@@ -309,6 +220,11 @@ def main() -> None:
         st.markdown("<div class='rq-side-title'>Data Source & Scenario</div>", unsafe_allow_html=True)
         
         uploaded_file = st.file_uploader("Upload Custom CSV", type=["csv"], help="Upload custom scenario dataset")
+        uploaded_image = st.file_uploader(
+            "Upload Cost Matrix Image",
+            type=["png", "jpg", "jpeg", "webp"],
+            help="Photo of a cost matrix table — AI extracts supply, demand and costs",
+        )
 
         scenario_name = st.selectbox(
             "Scenario",
@@ -367,56 +283,88 @@ def main() -> None:
     else:
         base_routes_df, _, _ = _cached_load_scenario(str(DATA_FILE_PATH), scenario_name)
 
-    supply_df, demand_df, cost_matrix_df = _get_editor_state(scenario_name, base_routes_df)
+    # ── Image extraction ──────────────────────────────────────────────────
+    if uploaded_image is not None:
+        image_hash = hash(uploaded_image.getvalue())
+        if st.session_state.get("extracted_image_hash") != image_hash:
+            try:
+                with st.spinner("Extracting cost matrix from image via Gemini..."):
+                    csv_text = extract_matrix_from_image(
+                        uploaded_image.getvalue(),
+                        mime_type=uploaded_image.type or "image/png",
+                        api_key=custom_api_key.strip(),
+                    )
+                extracted_df = pd.read_csv(BytesIO(csv_text.encode("utf-8")))
+                extracted_routes, _, _ = load_scenario(extracted_df, "custom")
+                st.session_state["matrix_state_custom"] = _build_matrix_from_routes(extracted_routes)
+                st.session_state["extracted_image_hash"] = image_hash
+                st.session_state["extracted_csv"] = csv_text
+                st.session_state["force_run"] = True
+                st.success("Matrix extracted — loaded into editor below.")
+            except RuntimeError as error:
+                if "NO_GOOGLE_API_KEY" in str(error):
+                    st.error("No Google API key found. Paste your Gemini API key in the sidebar (AI Briefing section) and re-upload.")
+                else:
+                    st.error(f"Image extraction failed: {error}")
+
+    if uploaded_image is not None and "matrix_state_custom" in st.session_state:
+        scenario_name = "custom"
+        matrix_df = st.session_state["matrix_state_custom"]
+    else:
+        matrix_df = _get_matrix_state(scenario_name, base_routes_df)
 
     # ── Page Header ───────────────────────────────────────────────────────
     st.markdown("<div class='rq-title'>RouteIQ</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='rq-subtitle'>Multi-scenario transportation optimizer — ESG Carbon analytics, Monte Carlo simulation, AI briefing</div>",
+        "<div class='rq-subtitle'>Multi-scenario transportation optimizer with AI executive briefing</div>",
         unsafe_allow_html=True,
     )
 
     # ── Editable Network Inputs ───────────────────────────────────────────
     st.markdown("<p class='rq-section'>Network Inputs</p>", unsafe_allow_html=True)
+    st.caption("Edit costs, Supply column and Demand row directly. Add rows for factories, use **+ Add column** for warehouses. Last row must be named Demand.")
 
-    factory_list = supply_df["factory"].tolist()
-    warehouse_list = demand_df["warehouse"].tolist()
-    default_cost_value = float(cost_matrix_df.values.mean()) if not cost_matrix_df.empty else 5.0
-    cost_matrix_df = cost_matrix_df.reindex(index=factory_list, columns=warehouse_list).fillna(default_cost_value)
+    matrix_key = f"matrix_editor_{scenario_name}"
+    state_key = f"matrix_state_{scenario_name}"
+    # ponytail: versioned widget key so warehouse add/remove rebuilds editor cleanly
+    version = st.session_state.get(f"{state_key}_v", 0)
 
     _, table_center_col, _ = st.columns([0.06, 0.88, 0.06])
     with table_center_col:
-        edit_col_1, edit_col_2 = st.columns(2, gap="medium")
-        with edit_col_1:
-            st.markdown("<p class='rq-table-label'>Factory Supply</p>", unsafe_allow_html=True)
-            supply_df = _render_centered_grid(
-                supply_df,
-                key=f"supply_editor_{scenario_name}",
-                editable=True,
-                non_editable_cols=["factory"],
-            )
-        with edit_col_2:
-            st.markdown("<p class='rq-table-label'>Warehouse Demand</p>", unsafe_allow_html=True)
-            demand_df = _render_centered_grid(
-                demand_df,
-                key=f"demand_editor_{scenario_name}",
-                editable=True,
-                non_editable_cols=["warehouse"],
-            )
-
-        st.markdown("<p class='rq-table-label' style='margin-top:1rem'>Route Cost Matrix</p>", unsafe_allow_html=True)
-        cost_matrix_edit_df = cost_matrix_df.reset_index(names="factory")
-        cost_matrix_edit_df = _render_centered_grid(
-            cost_matrix_edit_df,
-            key=f"cost_editor_{scenario_name}",
-            editable=True,
-            non_editable_cols=["factory"],
+        edited = st.data_editor(
+            matrix_df,
+            key=f"{matrix_key}_{version}",
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "Factory": st.column_config.TextColumn("Factory", required=True),
+                "Supply": st.column_config.NumberColumn("Supply", min_value=0.0),
+            },
         )
-        cost_matrix_df = cost_matrix_edit_df.set_index("factory")
 
-    _save_editor_state(scenario_name, supply_df, demand_df, cost_matrix_df)
+        add_col_1, add_col_2, _ = st.columns([0.3, 0.15, 0.55])
+        with add_col_1:
+            new_warehouse = st.text_input("New warehouse name", key=f"new_wh_{scenario_name}", placeholder="e.g. W4", label_visibility="collapsed")
+        with add_col_2:
+            if st.button("Add warehouse", key=f"add_wh_{scenario_name}") and new_warehouse.strip():
+                name = new_warehouse.strip()
+                if name in edited.columns:
+                    st.warning(f"Column {name} already exists.")
+                else:
+                    default_cost = float(edited.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
+                    updated = edited.copy()
+                    updated[name] = None
+                    demand_mask = updated["Factory"].astype(str).str.lower() == "demand"
+                    updated.loc[~demand_mask, name] = default_cost
+                    updated.loc[demand_mask, name] = 0.0
+                    st.session_state[state_key] = updated
+                    st.session_state[f"{state_key}_v"] = version + 1
+                    st.rerun()
 
-    should_run = auto_run or run_clicked
+    st.session_state[state_key] = edited
+    matrix_df = edited
+
+    should_run = auto_run or run_clicked or st.session_state.pop("force_run", False)
     results_key = f"results_state_{scenario_name}"
     result_state = st.session_state.get(results_key)
 
@@ -425,7 +373,7 @@ def main() -> None:
     # ── Run / Fetch Results ───────────────────────────────────────────────
     if should_run:
         try:
-            routes_df, supply, demand = _to_optimizer_inputs(supply_df, demand_df, cost_matrix_df)
+            routes_df, supply, demand = _to_optimizer_inputs(matrix_df)
             if cost_multiplier != 1.0:
                 routes_df = routes_df.copy()
                 routes_df["cost"] = routes_df["cost"] * cost_multiplier
@@ -439,8 +387,6 @@ def main() -> None:
                 fixed_lane_cost=fixed_lane_cost,
             )
 
-            result_df = calculate_carbon_emissions(result_df)
-            summary["total_co2_kg"] = float(result_df["co2_emissions_kg"].sum())
         except (RuntimeError, ValueError) as error:
             st.error(f"Optimization failed: {error}")
             return
@@ -476,7 +422,6 @@ def main() -> None:
         st.session_state["history"].append({
             "scenario": scenario_name,
             "total_cost": summary["total_cost"],
-            "total_co2_kg": summary.get("total_co2_kg", 0.0),
             "multiplier": cost_multiplier,
             "mip_enabled": enable_mip,
         })
@@ -494,8 +439,8 @@ def main() -> None:
     summary   = result_state["summary"]
 
     # ── Key Metrics ───────────────────────────────────────────────────────
-    st.markdown("<p class='rq-section'>Key Metrics & ESG Impact</p>", unsafe_allow_html=True)
-    metric_col_1, metric_col_2, metric_col_3, metric_col_4 = st.columns(4, gap="medium")
+    st.markdown("<p class='rq-section'>Key Metrics</p>", unsafe_allow_html=True)
+    metric_col_1, metric_col_2, metric_col_3 = st.columns(3, gap="medium")
 
     with metric_col_1:
         st.metric("Total Transportation Cost", f"${summary['total_cost']:,.2f}")
@@ -510,9 +455,6 @@ def main() -> None:
     with metric_col_3:
         fully_filled = all(ratio >= 1.0 for ratio in summary["warehouse_fill_ratio"].values())
         st.metric("Demand Coverage", "100%" if fully_filled else "< 100%")
-    with metric_col_4:
-        total_co2 = summary.get("total_co2_kg", 0.0)
-        st.metric("Est. CO2 Emissions", f"{total_co2:,.1f} kg")
 
     # ── Visualizations ────────────────────────────────────────────────────
     st.markdown("<p class='rq-section' style='margin-top:1.6rem'>Visualizations</p>", unsafe_allow_html=True)
@@ -572,17 +514,6 @@ def main() -> None:
             )
     else:
         st.warning(f"Briefing unavailable — {result_state['briefing_error']}")
-
-    # ── Monte Carlo & Advanced Analytics Expander ─────────────────────────
-    with st.expander("Stochastic Monte Carlo Risk Analysis"):
-        st.markdown("Simulate random demand fluctuations to test network resilience.")
-        mc_runs = st.slider("Simulation Runs", 10, 100, 30, 10)
-        demand_std = st.slider("Demand Std Dev (%)", 0.05, 0.30, 0.15, 0.05)
-        if st.button("Run Monte Carlo Risk Simulation"):
-            with st.spinner("Running stochastic LP simulations..."):
-                mc_df = run_monte_carlo_simulation(routes_df, supply, demand, n_simulations=mc_runs, demand_std_dev_pct=demand_std)
-                st.dataframe(mc_df, use_container_width=True)
-                st.success(f"Completed {mc_runs} simulations. Avg Cost: ${mc_df['total_cost'].mean():,.2f}")
 
     # ── Scenario History Expander ──────────────────────────────────────────
     if "history" in st.session_state and st.session_state["history"]:

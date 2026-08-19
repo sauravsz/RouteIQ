@@ -1,4 +1,6 @@
+import base64
 import os
+import re
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI, APIError
@@ -121,6 +123,67 @@ def build_summary_prompt(summary: Dict, scenario_name: str) -> Tuple[str, str]:
     )
 
     return system_prompt, user_prompt
+
+VISION_MODEL = "gemini-3.5-flash"
+
+def extract_matrix_from_image(
+    image_bytes: bytes,
+    mime_type: str = "image/png",
+    api_key: str = "",
+) -> str:
+    """Extract cost matrix from image, return long-format CSV string.
+
+    ponytail: vision model does OCR+structure in one shot. Works for clean printed
+    tables; hand-drawn or skewed photos may need manual correction after import.
+    """
+    cfg = PROVIDER_CONFIG["google"]
+    resolved_api_key = (api_key or _get_secret(cfg["key"]) or "").strip()
+    if not resolved_api_key:
+        raise RuntimeError("NO_GOOGLE_API_KEY")
+    client = OpenAI(api_key=resolved_api_key, base_url=cfg["default_base"])
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+
+    system_prompt = (
+        "You extract transportation problem tables from images. "
+        "Output ONLY CSV — no markdown fences, no commentary."
+    )
+    user_prompt = (
+        "This image shows a transportation cost matrix with factory supplies and warehouse demands.\n\n"
+        "Extract supply, demand, and all route costs. Output long-format CSV with this exact header:\n"
+        "scenario,factory,warehouse,supply,demand,cost\n\n"
+        "Rules:\n"
+        "- scenario is always 'custom'\n"
+        "- one row per factory-warehouse pair\n"
+        "- supply = that factory's total supply (repeated on each of its rows)\n"
+        "- demand = that warehouse's total demand (repeated on each of its rows)\n"
+        "- cost = unit shipping cost for that pair\n"
+        "- keep factory/warehouse names exactly as shown (e.g. F1, W2 or Factory A, Warehouse B)\n"
+        "- numbers only in supply/demand/cost columns, no currency symbols or units"
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=VISION_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64}"}},
+                ]},
+            ],
+            temperature=0,
+        )
+        content = response.choices[0].message.content or ""
+    except APIError as e:
+        raise RuntimeError(f"AI Provider API Error: {str(e)}")
+    except Exception as e:
+        raise RuntimeError(f"Image extraction failed: {str(e)}")
+
+    content = content.strip()
+    content = re.sub(r"^```(?:csv)?\s*|\s*```$", "", content, flags=re.MULTILINE).strip()
+    if "scenario,factory,warehouse,supply,demand,cost" not in content:
+        raise RuntimeError("Could not extract a valid cost matrix from this image. Try a clearer photo.")
+    return content
 
 def generate_executive_briefing(
     summary: Dict,
