@@ -57,7 +57,7 @@ def test_nan_cost_validation():
     matrix = app._build_matrix_from_routes(routes_df)
     matrix.loc[0, "W1"] = np.nan
 
-    with pytest.raises(RuntimeError, match="Missing cost for route"):
+    with pytest.raises(RuntimeError, match="Missing value for route"):
         app._to_optimizer_inputs(matrix)
 
 
@@ -103,3 +103,17 @@ def test_assignment_maximization():
     routes_df, res_df, summary = app._to_assignment_inputs(matrix, maximize=True)
     assert summary["total_cost"] == 21.0
     assert summary["objective"] == "maximize"
+
+
+def test_prohibited_mask_parsing():
+    matrix = pd.DataFrame([
+        {"Agent": "Worker 1", "Task A": 9.0, "Task B": "x", "Task C": 7.0},
+        {"Agent": "Worker 2", "Task A": 6.0, "Task B": 4.0, "Task C": "-"},
+        {"Agent": "Worker 3", "Task A": "inf", "Task B": 8.0, "Task C": 1.0},
+    ])
+    routes_df, res_df, summary = app._to_assignment_inputs(matrix, maximize=False)
+    # Prohibited assignments (x, -, inf) get cost 999999.0 so solver avoids them
+    active = res_df[res_df["flow"] > 0]
+    matched_costs = active["cost"].tolist()
+    assert all(c < app.PROHIBITED_COST for c in matched_costs)
+    assert summary["total_cost"] == 9.0 + 4.0 + 1.0

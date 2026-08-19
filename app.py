@@ -153,6 +153,23 @@ def _figure_to_png_bytes(figure: plt.Figure) -> bytes:
     return buffer.getvalue()
 
 DEMAND_ROW = "Demand"
+PROHIBITED_COST = 999999.0
+
+def _parse_cell_value(val, route_label: str) -> float:
+    import numpy as np
+    if val is None:
+        raise RuntimeError(f"Missing value for {route_label}. Fill in all matrix cells.")
+    if isinstance(val, (int, float)):
+        if np.isnan(val):
+            raise RuntimeError(f"Missing value for {route_label}. Fill in all matrix cells.")
+        return float(val)
+    sval = str(val).strip().lower()
+    if sval in ("x", "-", "inf", "n/a", "na", "prohibited", "none", "impossible"):
+        return PROHIBITED_COST
+    try:
+        return float(sval)
+    except ValueError:
+        raise RuntimeError(f"Invalid value '{val}' for {route_label}. Enter a number or 'x' for prohibited.")
 
 def _build_matrix_from_routes(routes_df: pd.DataFrame) -> pd.DataFrame:
     """Unified grid: rows = factories, cols = [Factory, Supply, <warehouses...>], last row = Demand."""
@@ -185,7 +202,12 @@ def _get_assignment_matrix_state(scenario_name: str) -> pd.DataFrame:
         st.session_state[state_key] = _build_default_assignment_matrix()
     return st.session_state[state_key]
 
-def _to_assignment_inputs(matrix_df: pd.DataFrame, maximize: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+def _to_assignment_inputs(
+    matrix_df: pd.DataFrame,
+    maximize: bool = False,
+    solver_type: str = "cbc",
+    timeout_seconds: int = 10,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     df = matrix_df.copy()
     df["Agent"] = df["Agent"].astype(str).str.strip()
     df = df[df["Agent"] != ""]
@@ -198,7 +220,6 @@ def _to_assignment_inputs(matrix_df: pd.DataFrame, maximize: bool = False) -> tu
     if df.empty:
         raise RuntimeError("No agents found in assignment matrix.")
 
-    import numpy as np
     supply_map = {row["Agent"]: 1.0 for _, row in df.iterrows()}
     demand_map = {t: 1.0 for t in task_cols}
 
@@ -206,9 +227,7 @@ def _to_assignment_inputs(matrix_df: pd.DataFrame, maximize: bool = False) -> tu
     for _, arow in df.iterrows():
         agent = arow["Agent"]
         for t in task_cols:
-            cval = arow[t]
-            if cval is None or (isinstance(cval, float) and np.isnan(cval)):
-                raise RuntimeError(f"Missing cost for assignment {agent} → {t}. Fill in all cells.")
+            cval = _parse_cell_value(arow[t], f"assignment {agent} → {t}")
             rows.append({
                 "scenario": "assignment",
                 "factory": agent,
@@ -219,14 +238,14 @@ def _to_assignment_inputs(matrix_df: pd.DataFrame, maximize: bool = False) -> tu
             })
 
     routes_df = pd.DataFrame(rows)
-    available_solvers = get_available_solvers()
-    solver_type = list(available_solvers.keys())[0]
 
     if maximize:
         max_c = float(routes_df["cost"].max())
         routes_to_solve = routes_df.copy()
         routes_to_solve["cost"] = max_c - routes_to_solve["cost"]
-        result_df, _ = solve_transportation(routes_to_solve, supply_map, demand_map, solver_type=solver_type)
+        result_df, _ = solve_transportation(
+            routes_to_solve, supply_map, demand_map, solver_type=solver_type, timeout_seconds=timeout_seconds
+        )
         result_df["cost"] = routes_df["cost"]
         result_df["route_cost"] = result_df["flow"] * result_df["cost"]
         summary = {
@@ -237,7 +256,9 @@ def _to_assignment_inputs(matrix_df: pd.DataFrame, maximize: bool = False) -> tu
             "warehouse_fill_ratio": {t: float(result_df[result_df["warehouse"] == t]["flow"].sum()) for t in demand_map},
         }
     else:
-        result_df, summary = solve_transportation(routes_df, supply_map, demand_map, solver_type=solver_type)
+        result_df, summary = solve_transportation(
+            routes_df, supply_map, demand_map, solver_type=solver_type, timeout_seconds=timeout_seconds
+        )
         summary["objective"] = "minimize"
 
     active_df = result_df[result_df["flow"] > 0].copy()
@@ -284,14 +305,12 @@ def _to_optimizer_inputs(matrix_df: pd.DataFrame) -> tuple[pd.DataFrame, dict, d
             raise RuntimeError(f"Warehouse '{w}' has no Demand value.")
         demand_map[w] = float(dv)
 
-    # BUG 4: validate no NaN costs
+    # Parse cell values with prohibited mask support ('x', '-', 'inf')
     rows: list[dict] = []
     for _, frow in factory_df.iterrows():
         factory = frow["Factory"]
         for w in warehouse_cols:
-            cost_val = frow[w]
-            if cost_val is None or (isinstance(cost_val, float) and np.isnan(cost_val)):
-                raise RuntimeError(f"Missing cost for route {factory} → {w}. Fill in all cost cells.")
+            cost_val = _parse_cell_value(frow[w], f"route {factory} → {w}")
             rows.append({
                 "scenario": "interactive",
                 "factory": factory,
@@ -364,6 +383,7 @@ def main() -> None:
         
         available_solvers = get_available_solvers()
         selected_solver = st.selectbox("Solver engine", list(available_solvers.keys()), index=0)
+        solver_timeout = st.slider("Solver Timeout (sec)", 2, 60, 10, 1)
         enable_mip = st.checkbox("Enable MIP Fixed-Charge", value=False)
         fixed_lane_cost = st.number_input("Fixed Lane Cost", min_value=0.0, value=0.0, step=10.0) if enable_mip else 0.0
 
@@ -574,6 +594,7 @@ def main() -> None:
                     supply,
                     demand,
                     solver_type=selected_solver,
+                    timeout_seconds=solver_timeout,
                     enable_mip=enable_mip,
                     fixed_lane_cost=fixed_lane_cost,
                 )
@@ -824,7 +845,9 @@ def main() -> None:
 
         if asgn_should_run:
             try:
-                asgn_routes_df, asgn_result_df, asgn_summary = _to_assignment_inputs(assign_matrix_df, maximize=is_max)
+                asgn_routes_df, asgn_result_df, asgn_summary = _to_assignment_inputs(
+                    assign_matrix_df, maximize=is_max, solver_type=selected_solver, timeout_seconds=solver_timeout
+                )
             except (RuntimeError, ValueError) as error:
                 st.error(f"Assignment optimization failed: {error}")
                 asgn_result_state = None
