@@ -88,6 +88,38 @@ def _resolve_provider_config(
     base_url = _get_secret(cfg["base"], cfg["default_base"])
     return api_key, model, base_url
 
+def build_assignment_summary_prompt(summary: Dict, objective: str = "minimize") -> Tuple[str, str]:
+    total_val = summary["total_cost"]
+    active_pairs = summary.get("active_assignments", [])
+
+    lines = [
+        f"Objective: {objective.upper()}",
+        f"Total {'Profit' if objective == 'maximize' else 'Cost'}: {total_val:.2f}",
+        "Assigned Pairs:",
+    ]
+    for pair in active_pairs:
+        agent = pair.get("factory", pair.get("agent", ""))
+        task = pair.get("warehouse", pair.get("task", ""))
+        cost = pair.get("cost", 0.0)
+        lines.append(f"  - {agent} → {task} ({'Profit' if objective == 'maximize' else 'Cost'}: {cost:.2f})")
+
+    bullet_summary = "\n".join(lines)
+
+    system_prompt = (
+        "You are an operations research consultant specializing in resource allocation. "
+        "Write a concise 2-paragraph executive briefing explaining the optimal assignment matching. "
+        "Highlight key matches, explain any unassigned agents or tasks, and comment on the total score. "
+        "Keep it professional and business-focused."
+    )
+
+    user_prompt = (
+        "Here is a summary of the optimal assignment matching:\n\n"
+        f"{bullet_summary}\n\n"
+        "Write the executive briefing now."
+    )
+
+    return system_prompt, user_prompt
+
 def build_summary_prompt(summary: Dict, scenario_name: str) -> Tuple[str, str]:
     total_cost = summary["total_cost"]
     factory_util = summary["factory_utilization"]
@@ -191,6 +223,8 @@ def generate_executive_briefing(
     provider: str = "",
     model: str = "",
     api_key: str = "",
+    problem_type: str = "transportation",
+    objective: str = "minimize",
 ) -> str:
     try:
         resolved_api_key, resolved_model, base_url = _resolve_provider_config(
@@ -200,7 +234,10 @@ def generate_executive_briefing(
         )
         client = OpenAI(api_key=resolved_api_key, base_url=base_url if base_url else None)
 
-        system_prompt, user_prompt = build_summary_prompt(summary, scenario_name)
+        if problem_type == "assignment":
+            system_prompt, user_prompt = build_assignment_summary_prompt(summary, objective=objective)
+        else:
+            system_prompt, user_prompt = build_summary_prompt(summary, scenario_name)
 
         response = client.chat.completions.create(
             model=resolved_model,

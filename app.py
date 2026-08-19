@@ -172,6 +172,81 @@ def _get_matrix_state(scenario_name: str, routes_df: pd.DataFrame) -> pd.DataFra
         st.session_state[state_key] = _build_matrix_from_routes(routes_df)
     return st.session_state[state_key]
 
+def _build_default_assignment_matrix() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"Agent": "Worker 1", "Task A": 9.0, "Task B": 2.0, "Task C": 7.0},
+        {"Agent": "Worker 2", "Task A": 6.0, "Task B": 4.0, "Task C": 3.0},
+        {"Agent": "Worker 3", "Task A": 5.0, "Task B": 8.0, "Task C": 1.0},
+    ])
+
+def _get_assignment_matrix_state(scenario_name: str) -> pd.DataFrame:
+    state_key = f"assignment_matrix_state_{scenario_name}"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = _build_default_assignment_matrix()
+    return st.session_state[state_key]
+
+def _to_assignment_inputs(matrix_df: pd.DataFrame, maximize: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    df = matrix_df.copy()
+    df["Agent"] = df["Agent"].astype(str).str.strip()
+    df = df[df["Agent"] != ""]
+    if df["Agent"].duplicated().any():
+        df = df.drop_duplicates(subset="Agent", keep="last")
+
+    task_cols = [c for c in df.columns if c != "Agent"]
+    if not task_cols:
+        raise RuntimeError("No tasks found in assignment matrix.")
+    if df.empty:
+        raise RuntimeError("No agents found in assignment matrix.")
+
+    import numpy as np
+    supply_map = {row["Agent"]: 1.0 for _, row in df.iterrows()}
+    demand_map = {t: 1.0 for t in task_cols}
+
+    rows: list[dict] = []
+    for _, arow in df.iterrows():
+        agent = arow["Agent"]
+        for t in task_cols:
+            cval = arow[t]
+            if cval is None or (isinstance(cval, float) and np.isnan(cval)):
+                raise RuntimeError(f"Missing cost for assignment {agent} → {t}. Fill in all cells.")
+            rows.append({
+                "scenario": "assignment",
+                "factory": agent,
+                "warehouse": t,
+                "supply": 1.0,
+                "demand": 1.0,
+                "cost": float(cval),
+            })
+
+    routes_df = pd.DataFrame(rows)
+    available_solvers = get_available_solvers()
+    solver_type = list(available_solvers.keys())[0]
+
+    if maximize:
+        max_c = float(routes_df["cost"].max())
+        routes_to_solve = routes_df.copy()
+        routes_to_solve["cost"] = max_c - routes_to_solve["cost"]
+        result_df, _ = solve_transportation(routes_to_solve, supply_map, demand_map, solver_type=solver_type)
+        result_df["cost"] = routes_df["cost"]
+        result_df["route_cost"] = result_df["flow"] * result_df["cost"]
+        summary = {
+            "total_cost": float(result_df["route_cost"].sum()),
+            "objective": "maximize",
+            "open_lanes_count": int(result_df[result_df["flow"] > 0]["flow"].count()),
+            "factory_utilization": {a: float(result_df[result_df["factory"] == a]["flow"].sum()) for a in supply_map},
+            "warehouse_fill_ratio": {t: float(result_df[result_df["warehouse"] == t]["flow"].sum()) for t in demand_map},
+        }
+    else:
+        result_df, summary = solve_transportation(routes_df, supply_map, demand_map, solver_type=solver_type)
+        summary["objective"] = "minimize"
+
+    active_df = result_df[result_df["flow"] > 0].copy()
+    active_df["warehouse"] = active_df["warehouse"].replace({"Dummy_Warehouse": "Unassigned"})
+    active_df["factory"] = active_df["factory"].replace({"Dummy_Factory": "Unassigned"})
+    summary["active_assignments"] = active_df.to_dict(orient="records")
+
+    return routes_df, result_df, summary
+
 def _to_optimizer_inputs(matrix_df: pd.DataFrame) -> tuple[pd.DataFrame, dict, dict]:
     df = matrix_df.copy()
     df["Factory"] = df["Factory"].astype(str).str.strip()
@@ -368,271 +443,488 @@ def main() -> None:
     # ── Page Header ───────────────────────────────────────────────────────
     st.markdown("<div class='rq-title'>RouteIQ</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='rq-subtitle'>Multi-scenario transportation optimizer with AI executive briefing</div>",
+        "<div class='rq-subtitle'>Multi-scenario transportation & assignment optimizer with AI executive briefing</div>",
         unsafe_allow_html=True,
     )
 
-    # ── Editable Network Inputs ───────────────────────────────────────
-    st.markdown("<p class='rq-section'>Network Inputs</p>", unsafe_allow_html=True)
+    main_tab_trans, main_tab_assign = st.tabs([
+        "🔀 Transportation Optimizer",
+        "🎯 Assignment Problem",
+    ])
 
-    matrix_key = f"matrix_editor_{scenario_name}"
-    state_key = f"matrix_state_{scenario_name}"
-    version = st.session_state.get(f"{state_key}_v", 0)
-    warehouse_cols = [c for c in matrix_df.columns if c not in ("Factory", "Supply")]
-    factory_names = [r for r in matrix_df["Factory"].tolist() if str(r).lower() != "demand"]
+    with main_tab_trans:
+            # ── Editable Network Inputs ───────────────────────────────────────
+        st.markdown("<p class='rq-section'>Network Inputs</p>", unsafe_allow_html=True)
 
-    tab_add, tab_remove = st.tabs(["Add", "Remove"])
+        matrix_key = f"matrix_editor_{scenario_name}"
+        state_key = f"matrix_state_{scenario_name}"
+        version = st.session_state.get(f"{state_key}_v", 0)
+        warehouse_cols = [c for c in matrix_df.columns if c not in ("Factory", "Supply")]
+        factory_names = [r for r in matrix_df["Factory"].tolist() if str(r).lower() != "demand"]
 
-    with tab_add:
-        ac1, ac2 = st.columns(2, gap="medium")
-        with ac1:
-            with st.form(key=f"form_add_f_{scenario_name}", clear_on_submit=True):
-                new_factory = st.text_input("Factory name", placeholder="e.g. F4")
-                submitted_f = st.form_submit_button("Add factory", use_container_width=True)
-            if submitted_f and (new_factory or "").strip():
-                name = new_factory.strip()
-                if name in matrix_df["Factory"].values:
-                    st.warning(f"'{name}' already exists.")
-                else:
-                    default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
-                    new_row = {"Factory": name, "Supply": 0.0}
-                    new_row.update({w: default_cost for w in warehouse_cols})
-                    demand_idx = matrix_df.index[matrix_df["Factory"].astype(str).str.lower() == "demand"]
-                    upper = matrix_df.loc[:demand_idx[0]-1] if len(demand_idx) else matrix_df.iloc[:-1]
-                    lower = matrix_df.loc[demand_idx[0]:] if len(demand_idx) else matrix_df.iloc[-1:]
-                    updated = pd.concat([upper, pd.DataFrame([new_row]), lower], ignore_index=True)
-                    st.session_state[state_key] = updated
-                    st.session_state[f"{state_key}_v"] = version + 1
-                    st.rerun()
-        with ac2:
-            with st.form(key=f"form_add_wh_{scenario_name}", clear_on_submit=True):
-                new_warehouse = st.text_input("Warehouse name", placeholder="e.g. W5")
-                submitted_w = st.form_submit_button("Add warehouse", use_container_width=True)
-            if submitted_w and (new_warehouse or "").strip():
-                name = new_warehouse.strip()
-                if name in matrix_df.columns:
-                    st.warning(f"'{name}' already exists.")
-                else:
-                    default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
-                    updated = matrix_df.copy()
-                    demand_mask = updated["Factory"].astype(str).str.lower() == "demand"
-                    updated[name] = default_cost
-                    updated.loc[demand_mask, name] = 0.0
-                    st.session_state[state_key] = updated
-                    st.session_state[f"{state_key}_v"] = version + 1
-                    st.rerun()
+        tab_add, tab_remove = st.tabs(["Add", "Remove"])
 
-    with tab_remove:
-        rc1, rc2 = st.columns(2, gap="medium")
-        with rc1:
-            rm_factory = st.selectbox("Factory to remove", options=factory_names, index=None, key=f"rm_f_{scenario_name}", placeholder="Select factory...")
-            if st.button("Remove factory", key=f"rm_f_btn_{scenario_name}", use_container_width=True):
-                if not rm_factory:
-                    st.warning("Select a factory first.")
-                elif len(factory_names) <= 1:
-                    st.warning("Cannot remove the last factory.")
-                else:
-                    updated = matrix_df[matrix_df["Factory"] != rm_factory].reset_index(drop=True)
-                    st.session_state[state_key] = updated
-                    st.session_state[f"{state_key}_v"] = version + 1
-                    st.rerun()
-        with rc2:
-            rm_warehouse = st.selectbox("Warehouse to remove", options=warehouse_cols, index=None, key=f"rm_wh_{scenario_name}", placeholder="Select warehouse...")
-            if st.button("Remove warehouse", key=f"rm_wh_btn_{scenario_name}", use_container_width=True):
-                if not rm_warehouse:
-                    st.warning("Select a warehouse first.")
-                elif len(warehouse_cols) <= 1:
-                    st.warning("Cannot remove the last warehouse.")
-                else:
-                    updated = matrix_df.drop(columns=[rm_warehouse])
-                    st.session_state[state_key] = updated
-                    st.session_state[f"{state_key}_v"] = version + 1
-                    st.rerun()
+        with tab_add:
+            ac1, ac2 = st.columns(2, gap="medium")
+            with ac1:
+                with st.form(key=f"form_add_f_{scenario_name}", clear_on_submit=True):
+                    new_factory = st.text_input("Factory name", placeholder="e.g. F4")
+                    submitted_f = st.form_submit_button("Add factory", use_container_width=True)
+                if submitted_f and (new_factory or "").strip():
+                    name = new_factory.strip()
+                    if name in matrix_df["Factory"].values:
+                        st.warning(f"'{name}' already exists.")
+                    else:
+                        default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
+                        new_row = {"Factory": name, "Supply": 0.0}
+                        new_row.update({w: default_cost for w in warehouse_cols})
+                        demand_idx = matrix_df.index[matrix_df["Factory"].astype(str).str.lower() == "demand"]
+                        upper = matrix_df.loc[:demand_idx[0]-1] if len(demand_idx) else matrix_df.iloc[:-1]
+                        lower = matrix_df.loc[demand_idx[0]:] if len(demand_idx) else matrix_df.iloc[-1:]
+                        updated = pd.concat([upper, pd.DataFrame([new_row]), lower], ignore_index=True)
+                        st.session_state[state_key] = updated
+                        st.session_state[f"{state_key}_v"] = version + 1
+                        st.rerun()
+            with ac2:
+                with st.form(key=f"form_add_wh_{scenario_name}", clear_on_submit=True):
+                    new_warehouse = st.text_input("Warehouse name", placeholder="e.g. W5")
+                    submitted_w = st.form_submit_button("Add warehouse", use_container_width=True)
+                if submitted_w and (new_warehouse or "").strip():
+                    name = new_warehouse.strip()
+                    if name in matrix_df.columns:
+                        st.warning(f"'{name}' already exists.")
+                    else:
+                        default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
+                        updated = matrix_df.copy()
+                        demand_mask = updated["Factory"].astype(str).str.lower() == "demand"
+                        updated[name] = default_cost
+                        updated.loc[demand_mask, name] = 0.0
+                        st.session_state[state_key] = updated
+                        st.session_state[f"{state_key}_v"] = version + 1
+                        st.rerun()
 
-    # ── Editable matrix table ─────────────────────────────────────
-    _, table_center_col, _ = st.columns([0.06, 0.88, 0.06])
-    with table_center_col:
-        # Hide Supply value on Demand row by replacing 0 with None for display
-        display_df = matrix_df.copy()
-        demand_mask = display_df["Factory"].astype(str).str.lower() == "demand"
-        display_df.loc[demand_mask, "Supply"] = None
+        with tab_remove:
+            rc1, rc2 = st.columns(2, gap="medium")
+            with rc1:
+                rm_factory = st.selectbox("Factory to remove", options=factory_names, index=None, key=f"rm_f_{scenario_name}", placeholder="Select factory...")
+                if st.button("Remove factory", key=f"rm_f_btn_{scenario_name}", use_container_width=True):
+                    if not rm_factory:
+                        st.warning("Select a factory first.")
+                    elif len(factory_names) <= 1:
+                        st.warning("Cannot remove the last factory.")
+                    else:
+                        updated = matrix_df[matrix_df["Factory"] != rm_factory].reset_index(drop=True)
+                        st.session_state[state_key] = updated
+                        st.session_state[f"{state_key}_v"] = version + 1
+                        st.rerun()
+            with rc2:
+                rm_warehouse = st.selectbox("Warehouse to remove", options=warehouse_cols, index=None, key=f"rm_wh_{scenario_name}", placeholder="Select warehouse...")
+                if st.button("Remove warehouse", key=f"rm_wh_btn_{scenario_name}", use_container_width=True):
+                    if not rm_warehouse:
+                        st.warning("Select a warehouse first.")
+                    elif len(warehouse_cols) <= 1:
+                        st.warning("Cannot remove the last warehouse.")
+                    else:
+                        updated = matrix_df.drop(columns=[rm_warehouse])
+                        st.session_state[state_key] = updated
+                        st.session_state[f"{state_key}_v"] = version + 1
+                        st.rerun()
 
-        edited = st.data_editor(
-            display_df,
-            key=f"{matrix_key}_{version}",
-            num_rows="fixed",
-            use_container_width=True,
-            column_config={
-                "Factory": st.column_config.TextColumn("Factory", disabled=True),
-                "Supply": st.column_config.NumberColumn("Supply", min_value=0.0),
-            },
-        )
-        # Restore Demand row Supply to 0 after edit (so parser ignores it)
-        demand_mask_out = edited["Factory"].astype(str).str.lower() == "demand"
-        edited.loc[demand_mask_out, "Supply"] = 0.0
+        # ── Editable matrix table ─────────────────────────────────────
+        _, table_center_col, _ = st.columns([0.06, 0.88, 0.06])
+        with table_center_col:
+            # Hide Supply value on Demand row by replacing 0 with None for display
+            display_df = matrix_df.copy()
+            demand_mask = display_df["Factory"].astype(str).str.lower() == "demand"
+            display_df.loc[demand_mask, "Supply"] = None
 
-    st.session_state[state_key] = edited
-    matrix_df = edited
-
-    should_run = auto_run or run_clicked or st.session_state.pop("force_run", False)
-    results_key = f"results_state_{scenario_name}"
-    result_state = st.session_state.get(results_key)
-
-    st.markdown("<hr class='rq-divider'>", unsafe_allow_html=True)
-
-    # ── Run / Fetch Results ───────────────────────────────────────────────
-    if should_run:
-        try:
-            routes_df, supply, demand = _to_optimizer_inputs(matrix_df)
-            if cost_multiplier != 1.0:
-                routes_df = routes_df.copy()
-                routes_df["cost"] = routes_df["cost"] * cost_multiplier
-
-            result_df, summary = solve_transportation(
-                routes_df,
-                supply,
-                demand,
-                solver_type=selected_solver,
-                enable_mip=enable_mip,
-                fixed_lane_cost=fixed_lane_cost,
+            edited = st.data_editor(
+                display_df,
+                key=f"{matrix_key}_{version}",
+                num_rows="fixed",
+                use_container_width=True,
+                column_config={
+                    "Factory": st.column_config.TextColumn("Factory", disabled=True),
+                    "Supply": st.column_config.NumberColumn("Supply", min_value=0.0),
+                },
             )
+            # Restore Demand row Supply to 0 after edit (so parser ignores it)
+            demand_mask_out = edited["Factory"].astype(str).str.lower() == "demand"
+            edited.loc[demand_mask_out, "Supply"] = 0.0
 
-        except (RuntimeError, ValueError) as error:
-            st.error(f"Optimization failed: {error}")
+        st.session_state[state_key] = edited
+        matrix_df = edited
+
+        should_run = auto_run or run_clicked or st.session_state.pop("force_run", False)
+        results_key = f"results_state_{scenario_name}"
+        result_state = st.session_state.get(results_key)
+
+        st.markdown("<hr class='rq-divider'>", unsafe_allow_html=True)
+
+        # ── Run / Fetch Results ───────────────────────────────────────────────
+        if should_run:
+            try:
+                routes_df, supply, demand = _to_optimizer_inputs(matrix_df)
+                if cost_multiplier != 1.0:
+                    routes_df = routes_df.copy()
+                    routes_df["cost"] = routes_df["cost"] * cost_multiplier
+
+                result_df, summary = solve_transportation(
+                    routes_df,
+                    supply,
+                    demand,
+                    solver_type=selected_solver,
+                    enable_mip=enable_mip,
+                    fixed_lane_cost=fixed_lane_cost,
+                )
+
+            except (RuntimeError, ValueError) as error:
+                st.error(f"Optimization failed: {error}")
+                return
+
+            briefing_text = ""
+            briefing_error = ""
+            try:
+                briefing_text = generate_executive_briefing(
+                    summary=summary,
+                    scenario_name=scenario_name,
+                    provider=selected_provider,
+                    model=active_model,
+                    api_key=custom_api_key.strip(),
+                )
+            except RuntimeError as error:
+                briefing_error = str(error)
+
+            result_state = {
+                "routes_df": routes_df,
+                "supply": supply,
+                "demand": demand,
+                "result_df": result_df,
+                "summary": summary,
+                "briefing_text": briefing_text,
+                "briefing_error": briefing_error,
+                "provider": selected_provider,
+                "model": active_model,
+            }
+            st.session_state[results_key] = result_state
+
+            if "history" not in st.session_state:
+                st.session_state["history"] = []
+            st.session_state["history"].append({
+                "scenario": scenario_name,
+                "total_cost": summary["total_cost"],
+                "multiplier": cost_multiplier,
+                "mip_enabled": enable_mip,
+            })
+
+        elif result_state is None:
+            st.info("Adjust inputs above, then click **▶ Run optimization** in the sidebar.")
             return
-
-        briefing_text = ""
-        briefing_error = ""
-        try:
-            briefing_text = generate_executive_briefing(
-                summary=summary,
-                scenario_name=scenario_name,
-                provider=selected_provider,
-                model=active_model,
-                api_key=custom_api_key.strip(),
-            )
-        except RuntimeError as error:
-            briefing_error = str(error)
-
-        result_state = {
-            "routes_df": routes_df,
-            "supply": supply,
-            "demand": demand,
-            "result_df": result_df,
-            "summary": summary,
-            "briefing_text": briefing_text,
-            "briefing_error": briefing_error,
-            "provider": selected_provider,
-            "model": active_model,
-        }
-        st.session_state[results_key] = result_state
-
-        if "history" not in st.session_state:
-            st.session_state["history"] = []
-        st.session_state["history"].append({
-            "scenario": scenario_name,
-            "total_cost": summary["total_cost"],
-            "multiplier": cost_multiplier,
-            "mip_enabled": enable_mip,
-        })
-
-    elif result_state is None:
-        st.info("Adjust inputs above, then click **▶ Run optimization** in the sidebar.")
-        return
-    else:
-        st.caption("Showing results from last run — click Run to refresh.")
-
-    routes_df = result_state["routes_df"]
-    supply    = result_state["supply"]
-    demand    = result_state["demand"]
-    result_df = result_state["result_df"]
-    summary   = result_state["summary"]
-
-    # ── Key Metrics ───────────────────────────────────────────────────────
-    st.markdown("<p class='rq-section'>Key Metrics</p>", unsafe_allow_html=True)
-    metric_col_1, metric_col_2, metric_col_3 = st.columns(3, gap="medium")
-
-    with metric_col_1:
-        st.metric("Total Transportation Cost", f"${summary['total_cost']:,.2f}")
-    with metric_col_2:
-        if summary["factory_utilization"]:
-            most_utilized_factory, utilization_value = max(
-                summary["factory_utilization"].items(), key=lambda item: item[1]
-            )
         else:
-            most_utilized_factory, utilization_value = "N/A", 0.0
-        st.metric("Top Factory Utilization", f"{most_utilized_factory}", delta=f"{utilization_value:.1%} utilized")
-    with metric_col_3:
-        fully_filled = all(ratio >= 1.0 for ratio in summary["warehouse_fill_ratio"].values())
-        st.metric("Demand Coverage", "100%" if fully_filled else "< 100%")
+            st.caption("Showing results from last run — click Run to refresh.")
 
-    # ── Visualizations ────────────────────────────────────────────────────
-    st.markdown("<p class='rq-section' style='margin-top:1.6rem'>Visualizations</p>", unsafe_allow_html=True)
-    chart_col_1, chart_col_2 = st.columns(2, gap="medium")
+        routes_df = result_state["routes_df"]
+        supply    = result_state["supply"]
+        demand    = result_state["demand"]
+        result_df = result_state["result_df"]
+        summary   = result_state["summary"]
 
-    if use_plotly:
-        with chart_col_1:
-            st.plotly_chart(plot_network_plotly(result_df, title="Interactive Network Flow"), use_container_width=True)
-        with chart_col_2:
-            st.plotly_chart(plot_cost_heatmap_plotly(routes_df, title="Interactive Cost Heatmap"), use_container_width=True)
-    else:
-        with chart_col_1:
-            st.markdown("<p class='rq-table-label'>Network Flow</p>", unsafe_allow_html=True)
-            figure_network, axis_network = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
-            plot_network(
-                result_df,
-                title=f"{scenario_name.replace('_', ' ').title()} — Network Flow",
-                axis=axis_network,
-                dark_mode=is_dark_mode,
-            )
-            st.image(_figure_to_png_bytes(figure_network), use_container_width=True)
-            plt.close(figure_network)
+        # ── Key Metrics ───────────────────────────────────────────────────────
+        st.markdown("<p class='rq-section'>Key Metrics</p>", unsafe_allow_html=True)
+        metric_col_1, metric_col_2, metric_col_3 = st.columns(3, gap="medium")
 
-        with chart_col_2:
-            st.markdown("<p class='rq-table-label'>Cost Heatmap</p>", unsafe_allow_html=True)
-            figure_heatmap, axis_heatmap = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
-            plot_cost_heatmap(
-                routes_df,
-                title=f"{scenario_name.replace('_', ' ').title()} — Cost Heatmap",
-                axis=axis_heatmap,
-                dark_mode=is_dark_mode,
-            )
-            st.image(_figure_to_png_bytes(figure_heatmap), use_container_width=True)
-            plt.close(figure_heatmap)
+        with metric_col_1:
+            st.metric("Total Transportation Cost", f"${summary['total_cost']:,.2f}")
+        with metric_col_2:
+            if summary["factory_utilization"]:
+                most_utilized_factory, utilization_value = max(
+                    summary["factory_utilization"].items(), key=lambda item: item[1]
+                )
+            else:
+                most_utilized_factory, utilization_value = "N/A", 0.0
+            st.metric("Top Factory Utilization", f"{most_utilized_factory}", delta=f"{utilization_value:.1%} utilized")
+        with metric_col_3:
+            fully_filled = all(ratio >= 1.0 for ratio in summary["warehouse_fill_ratio"].values())
+            st.metric("Demand Coverage", "100%" if fully_filled else "< 100%")
 
-    # ── AI Briefing & Exports ─────────────────────────────────────────────
-    st.markdown("<p class='rq-section' style='margin-top:1.6rem'>AI Executive Briefing & Export Reports</p>", unsafe_allow_html=True)
-    if result_state["briefing_text"]:
-        st.write(result_state["briefing_text"])
+        # ── Visualizations ────────────────────────────────────────────────────
+        st.markdown("<p class='rq-section' style='margin-top:1.6rem'>Visualizations</p>", unsafe_allow_html=True)
+        chart_col_1, chart_col_2 = st.columns(2, gap="medium")
+
+        if use_plotly:
+            with chart_col_1:
+                st.plotly_chart(plot_network_plotly(result_df, title="Interactive Network Flow"), use_container_width=True)
+            with chart_col_2:
+                st.plotly_chart(plot_cost_heatmap_plotly(routes_df, title="Interactive Cost Heatmap"), use_container_width=True)
+        else:
+            with chart_col_1:
+                st.markdown("<p class='rq-table-label'>Network Flow</p>", unsafe_allow_html=True)
+                figure_network, axis_network = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
+                plot_network(
+                    result_df,
+                    title=f"{scenario_name.replace('_', ' ').title()} — Network Flow",
+                    axis=axis_network,
+                    dark_mode=is_dark_mode,
+                )
+                st.image(_figure_to_png_bytes(figure_network), use_container_width=True)
+                plt.close(figure_network)
+
+            with chart_col_2:
+                st.markdown("<p class='rq-table-label'>Cost Heatmap</p>", unsafe_allow_html=True)
+                figure_heatmap, axis_heatmap = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
+                plot_cost_heatmap(
+                    routes_df,
+                    title=f"{scenario_name.replace('_', ' ').title()} — Cost Heatmap",
+                    axis=axis_heatmap,
+                    dark_mode=is_dark_mode,
+                )
+                st.image(_figure_to_png_bytes(figure_heatmap), use_container_width=True)
+                plt.close(figure_heatmap)
+
+        # ── AI Briefing & Exports ─────────────────────────────────────────────
+        st.markdown("<p class='rq-section' style='margin-top:1.6rem'>AI Executive Briefing & Export Reports</p>", unsafe_allow_html=True)
+        if result_state["briefing_text"]:
+            st.write(result_state["briefing_text"])
         
-        # ponytail: cache report bytes in result_state to avoid regeneration on rerun
-        if "pdf_bytes" not in result_state:
-            result_state["pdf_bytes"] = generate_pdf_report(summary, scenario_name, result_state["briefing_text"], result_df)
-            result_state["excel_bytes"] = generate_excel_report(summary, scenario_name, result_df)
+            # ponytail: cache report bytes in result_state to avoid regeneration on rerun
+            if "pdf_bytes" not in result_state:
+                result_state["pdf_bytes"] = generate_pdf_report(summary, scenario_name, result_state["briefing_text"], result_df)
+                result_state["excel_bytes"] = generate_excel_report(summary, scenario_name, result_df)
 
-        btn_col1, btn_col2, _ = st.columns([0.25, 0.25, 0.5])
-        with btn_col1:
-            st.download_button(
-                "Download Executive PDF",
-                data=result_state["pdf_bytes"],
-                file_name=f"RouteIQ_{scenario_name}_report.pdf",
-                mime="application/pdf",
-            )
-        with btn_col2:
-            st.download_button(
-                "Download Excel Dataset",
-                data=result_state["excel_bytes"],
-                file_name=f"RouteIQ_{scenario_name}_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-    else:
-        st.warning(f"Briefing unavailable — {result_state['briefing_error']}")
+            btn_col1, btn_col2, _ = st.columns([0.25, 0.25, 0.5])
+            with btn_col1:
+                st.download_button(
+                    "Download Executive PDF",
+                    data=result_state["pdf_bytes"],
+                    file_name=f"RouteIQ_{scenario_name}_report.pdf",
+                    mime="application/pdf",
+                )
+            with btn_col2:
+                st.download_button(
+                    "Download Excel Dataset",
+                    data=result_state["excel_bytes"],
+                    file_name=f"RouteIQ_{scenario_name}_report.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+        else:
+            st.warning(f"Briefing unavailable — {result_state['briefing_error']}")
 
-    # ── Scenario History Expander ──────────────────────────────────────────
-    if "history" in st.session_state and st.session_state["history"]:
-        with st.expander("Run History & Scenario Comparison"):
-            history_df = pd.DataFrame(st.session_state["history"])
-            st.dataframe(history_df, use_container_width=True)
+        # ── Scenario History Expander ──────────────────────────────────────────
+        if "history" in st.session_state and st.session_state["history"]:
+            with st.expander("Run History & Scenario Comparison"):
+                history_df = pd.DataFrame(st.session_state["history"])
+                st.dataframe(history_df, use_container_width=True)
+
+    with main_tab_assign:
+        st.markdown("<p class='rq-section'>Assignment Problem Matrix</p>", unsafe_allow_html=True)
+        st.caption("1-to-1 matching of Agents (Workers/Machines) to Tasks (Jobs/Projects). Supply and Demand are fixed to 1.")
+
+        asgn_obj_col, asgn_space = st.columns([0.4, 0.6])
+        with asgn_obj_col:
+            asgn_objective = st.radio(
+                "Optimization Objective",
+                options=["Minimize Cost", "Maximize Profit / Rating"],
+                horizontal=True,
+                key=f"asgn_obj_{scenario_name}",
+            )
+        is_max = "Maximize" in asgn_objective
+
+        assign_matrix_df = _get_assignment_matrix_state(scenario_name)
+        asgn_matrix_key = f"asgn_matrix_editor_{scenario_name}"
+        asgn_state_key = f"assignment_matrix_state_{scenario_name}"
+        asgn_version = st.session_state.get(f"{asgn_state_key}_v", 0)
+
+        asgn_task_cols = [c for c in assign_matrix_df.columns if c != "Agent"]
+        asgn_agent_names = assign_matrix_df["Agent"].tolist()
+
+        asgn_tab_add, asgn_tab_remove = st.tabs(["Add", "Remove"])
+
+        with asgn_tab_add:
+            aac1, aac2 = st.columns(2, gap="medium")
+            with aac1:
+                with st.form(key=f"form_add_agent_{scenario_name}", clear_on_submit=True):
+                    new_agent = st.text_input("Agent name", placeholder="e.g. Worker 4")
+                    submitted_agent = st.form_submit_button("Add agent", use_container_width=True)
+                if submitted_agent and (new_agent or "").strip():
+                    name = new_agent.strip()
+                    if name in assign_matrix_df["Agent"].values:
+                        st.warning(f"'{name}' already exists.")
+                    else:
+                        default_c = float(assign_matrix_df.drop(columns=["Agent"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
+                        new_row = {"Agent": name}
+                        new_row.update({t: default_c for t in asgn_task_cols})
+                        updated_asgn = pd.concat([assign_matrix_df, pd.DataFrame([new_row])], ignore_index=True)
+                        st.session_state[asgn_state_key] = updated_asgn
+                        st.session_state[f"{asgn_state_key}_v"] = asgn_version + 1
+                        st.rerun()
+            with aac2:
+                with st.form(key=f"form_add_task_{scenario_name}", clear_on_submit=True):
+                    new_task = st.text_input("Task name", placeholder="e.g. Task D")
+                    submitted_task = st.form_submit_button("Add task", use_container_width=True)
+                if submitted_task and (new_task or "").strip():
+                    name = new_task.strip()
+                    if name in assign_matrix_df.columns:
+                        st.warning(f"'{name}' already exists.")
+                    else:
+                        default_c = float(assign_matrix_df.drop(columns=["Agent"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
+                        updated_asgn = assign_matrix_df.copy()
+                        updated_asgn[name] = default_c
+                        st.session_state[asgn_state_key] = updated_asgn
+                        st.session_state[f"{asgn_state_key}_v"] = asgn_version + 1
+                        st.rerun()
+
+        with asgn_tab_remove:
+            arc1, arc2 = st.columns(2, gap="medium")
+            with arc1:
+                rm_agent = st.selectbox("Agent to remove", options=asgn_agent_names, index=None, key=f"rm_agent_{scenario_name}", placeholder="Select agent...")
+                if st.button("Remove agent", key=f"rm_agent_btn_{scenario_name}", use_container_width=True):
+                    if not rm_agent:
+                        st.warning("Select an agent first.")
+                    elif len(asgn_agent_names) <= 1:
+                        st.warning("Cannot remove the last agent.")
+                    else:
+                        updated_asgn = assign_matrix_df[assign_matrix_df["Agent"] != rm_agent].reset_index(drop=True)
+                        st.session_state[asgn_state_key] = updated_asgn
+                        st.session_state[f"{asgn_state_key}_v"] = asgn_version + 1
+                        st.rerun()
+            with arc2:
+                rm_task = st.selectbox("Task to remove", options=asgn_task_cols, index=None, key=f"rm_task_{scenario_name}", placeholder="Select task...")
+                if st.button("Remove task", key=f"rm_task_btn_{scenario_name}", use_container_width=True):
+                    if not rm_task:
+                        st.warning("Select a task first.")
+                    elif len(asgn_task_cols) <= 1:
+                        st.warning("Cannot remove the last task.")
+                    else:
+                        updated_asgn = assign_matrix_df.drop(columns=[rm_task])
+                        st.session_state[asgn_state_key] = updated_asgn
+                        st.session_state[f"{asgn_state_key}_v"] = asgn_version + 1
+                        st.rerun()
+
+        # ── Editable Assignment Matrix Table ──────────────────────────
+        _, asgn_table_center, _ = st.columns([0.06, 0.88, 0.06])
+        with asgn_table_center:
+            edited_asgn = st.data_editor(
+                assign_matrix_df,
+                key=f"{asgn_matrix_key}_{asgn_version}",
+                num_rows="fixed",
+                use_container_width=True,
+                column_config={
+                    "Agent": st.column_config.TextColumn("Agent (Worker/Machine)", disabled=True),
+                },
+            )
+
+        st.session_state[asgn_state_key] = edited_asgn
+        assign_matrix_df = edited_asgn
+
+        asgn_should_run = auto_run or run_clicked
+        asgn_results_key = f"asgn_results_state_{scenario_name}_{'max' if is_max else 'min'}"
+        asgn_result_state = st.session_state.get(asgn_results_key)
+
+        st.markdown("<hr class='rq-divider'>", unsafe_allow_html=True)
+
+        if asgn_should_run:
+            try:
+                asgn_routes_df, asgn_result_df, asgn_summary = _to_assignment_inputs(assign_matrix_df, maximize=is_max)
+            except (RuntimeError, ValueError) as error:
+                st.error(f"Assignment optimization failed: {error}")
+                asgn_result_state = None
+            else:
+                asgn_briefing_text = ""
+                asgn_briefing_error = ""
+                try:
+                    asgn_briefing_text = generate_executive_briefing(
+                        summary=asgn_summary,
+                        scenario_name=scenario_name,
+                        provider=selected_provider,
+                        model=active_model,
+                        api_key=custom_api_key.strip(),
+                        problem_type="assignment",
+                        objective="maximize" if is_max else "minimize",
+                    )
+                except RuntimeError as error:
+                    asgn_briefing_error = str(error)
+
+                asgn_result_state = {
+                    "routes_df": asgn_routes_df,
+                    "result_df": asgn_result_df,
+                    "summary": asgn_summary,
+                    "briefing_text": asgn_briefing_text,
+                    "briefing_error": asgn_briefing_error,
+                    "is_max": is_max,
+                }
+                st.session_state[asgn_results_key] = asgn_result_state
+
+        if asgn_result_state is not None:
+            a_routes_df = asgn_result_state["routes_df"]
+            a_result_df = asgn_result_state["result_df"]
+            a_summary   = asgn_result_state["summary"]
+            a_is_max    = asgn_result_state["is_max"]
+
+            # ── Key Assignment Metrics ─────────────────────────────────
+            st.markdown("<p class='rq-section'>Assignment Metrics</p>", unsafe_allow_html=True)
+            am1, am2, am3 = st.columns(3, gap="medium")
+            with am1:
+                val_label = "Total Profit / Rating" if a_is_max else "Total Assignment Cost"
+                st.metric(val_label, f"${a_summary['total_cost']:,.2f}")
+            with am2:
+                active_count = len([p for p in a_summary.get("active_assignments", []) if p["warehouse"] != "Unassigned" and p["factory"] != "Unassigned"])
+                st.metric("Assigned Pairs", f"{active_count}")
+            with am3:
+                unassigned_agents = [p["factory"] for p in a_summary.get("active_assignments", []) if p["warehouse"] == "Unassigned"]
+                st.metric("Unassigned Agents", f"{len(unassigned_agents)}", delta=f"{', '.join(unassigned_agents)}" if unassigned_agents else "None")
+
+            # ── Optimal Pair Allocations Table ────────────────────────
+            st.markdown("<p class='rq-section' style='margin-top:1.6rem'>Optimal Matching Pairs</p>", unsafe_allow_html=True)
+            active_pairs = [p for p in a_summary.get("active_assignments", []) if p["factory"] != "Unassigned" and p["warehouse"] != "Unassigned"]
+            if active_pairs:
+                pairs_display = pd.DataFrame([
+                    {
+                        "Agent": p["factory"],
+                        "Assigned Task": p["warehouse"],
+                        "Cost / Rating ($)": f"${p['cost']:.2f}",
+                    }
+                    for p in active_pairs
+                ])
+                st.dataframe(pairs_display, use_container_width=True)
+
+            # ── Visualizations ────────────────────────────────────────
+            st.markdown("<p class='rq-section' style='margin-top:1.6rem'>Visualizations</p>", unsafe_allow_html=True)
+            achart1, achart2 = st.columns(2, gap="medium")
+            if use_plotly:
+                with achart1:
+                    st.plotly_chart(plot_network_plotly(a_result_df, title="Assignment Flow Graph"), use_container_width=True)
+                with achart2:
+                    st.plotly_chart(plot_cost_heatmap_plotly(a_routes_df, title="Assignment Matrix Heatmap"), use_container_width=True)
+            else:
+                with achart1:
+                    fig_net, ax_net = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
+                    plot_network(a_result_df, title="Assignment Flow Graph", axis=ax_net, dark_mode=is_dark_mode)
+                    st.image(_figure_to_png_bytes(fig_net), use_container_width=True)
+                    plt.close(fig_net)
+                with achart2:
+                    fig_heat, ax_heat = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
+                    plot_cost_heatmap(a_routes_df, title="Assignment Matrix Heatmap", axis=ax_heat, dark_mode=is_dark_mode)
+                    st.image(_figure_to_png_bytes(fig_heat), use_container_width=True)
+                    plt.close(fig_heat)
+
+            # ── AI Briefing & Exports ──────────────────────────────────
+            st.markdown("<p class='rq-section' style='margin-top:1.6rem'>AI Assignment Briefing & Export Reports</p>", unsafe_allow_html=True)
+            if asgn_result_state["briefing_text"]:
+                st.write(asgn_result_state["briefing_text"])
+
+                if "pdf_bytes" not in asgn_result_state:
+                    asgn_result_state["pdf_bytes"] = generate_pdf_report(a_summary, f"assignment_{'max' if a_is_max else 'min'}", asgn_result_state["briefing_text"], a_result_df)
+                    asgn_result_state["excel_bytes"] = generate_excel_report(a_summary, f"assignment_{'max' if a_is_max else 'min'}", a_result_df)
+
+                ab1, ab2, _ = st.columns([0.25, 0.25, 0.5])
+                with ab1:
+                    st.download_button("Download Executive PDF", data=asgn_result_state["pdf_bytes"], file_name=f"RouteIQ_assignment_report.pdf", mime="application/pdf", key="dl_asgn_pdf")
+                with ab2:
+                    st.download_button("Download Excel Dataset", data=asgn_result_state["excel_bytes"], file_name=f"RouteIQ_assignment_report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_asgn_excel")
+            else:
+                st.warning(f"Briefing unavailable — {asgn_result_state['briefing_error']}")
+        else:
+            st.info("Adjust assignment inputs above, then click **▶ Run optimization** in the sidebar.")
 
 if __name__ == "__main__":
     main()

@@ -81,3 +81,25 @@ def test_factory_deduplication():
     
     r_out, s_out, d_out = app._to_optimizer_inputs(dup_matrix)
     assert len(s_out) == len(routes_df["factory"].unique())
+
+
+def test_assignment_minimization():
+    matrix = pd.DataFrame([
+        {"Agent": "Worker 1", "Task A": 9.0, "Task B": 2.0, "Task C": 7.0},
+        {"Agent": "Worker 2", "Task A": 6.0, "Task B": 4.0, "Task C": 3.0},
+        {"Agent": "Worker 3", "Task A": 5.0, "Task B": 8.0, "Task C": 1.0},
+    ])
+    routes_df, res_df, summary = app._to_assignment_inputs(matrix, maximize=False)
+    assert summary["total_cost"] == 9.0
+    assert summary["objective"] == "minimize"
+
+
+def test_assignment_maximization():
+    matrix = pd.DataFrame([
+        {"Agent": "Worker 1", "Task A": 9.0, "Task B": 2.0, "Task C": 7.0},
+        {"Agent": "Worker 2", "Task A": 6.0, "Task B": 4.0, "Task C": 3.0},
+        {"Agent": "Worker 3", "Task A": 5.0, "Task B": 8.0, "Task C": 1.0},
+    ])
+    routes_df, res_df, summary = app._to_assignment_inputs(matrix, maximize=True)
+    assert summary["total_cost"] == 21.0
+    assert summary["objective"] == "maximize"
