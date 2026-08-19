@@ -2,143 +2,79 @@
 
 ![Demo](assets/demo.gif)
 
-> Multi-scenario transportation optimizer with AI executive briefing
+> Multi-scenario transportation optimizer with AI executive briefing & cost matrix image extraction.
 
 RouteIQ is an interactive Streamlit app for transportation-network optimization.
-It solves a classic supply-to-demand allocation problem with linear programming,
-compares multiple scenarios, and generates an executive AI briefing.
+It solves classic supply-to-demand allocation problems using linear programming (PuLP),
+supports custom image uploads for automatic matrix extraction via Gemini 3.5 Flash,
+and generates non-technical AI executive briefings.
 
 ## Problem Statement
 
 Given:
-- Multiple factories with fixed supply.
-- Multiple warehouses with required demand.
-- Route-level transportation costs.
+- Multiple factories with fixed supply capacities.
+- Multiple warehouses with required demand volumes.
+- Route-level shipping costs per unit.
 
 Goal:
-- Ship units from factories to warehouses to satisfy demand at minimum total cost.
+- Determine optimal shipping flows from factories to warehouses to satisfy demand at minimum total cost.
 
-## Features
+## Key Features
 
-- PuLP optimization model with supply and demand constraints.
-- Scenario analysis in one dataset: `baseline`, `disruption`, `cost_surge`.
-- Visualization layer:
-  - Network flow chart.
-  - Cost heatmap.
-- AI executive briefing generated from optimization outputs.
-- Streamlit interface:
-  - Scenario selector.
-  - Cost multiplier slider for what-if analysis.
-  - AI provider and model selector for briefing generation.
-  - Live metrics, charts, and briefing in one dashboard.
+- **Unified Cost Matrix Grid**: Edit costs, factory supplies, and warehouse demands in a single unified table (`st.data_editor`).
+- **Dynamic Network Scaling**: Add or remove factories (rows) and warehouses (columns) directly from the interface.
+- **AI Image Extraction**: Upload a photo of a cost matrix table — extracted automatically via Google Gemini 3.5 Flash vision into RouteIQ's solver.
+- **LP & Fixed-Charge MIP Solvers**: Solve standard transportation LPs or MIPs with fixed lane costs using CBC / GLPK.
+- **AI Executive Briefing**: Multi-provider LLM integration (Google, OpenAI, Groq, Cerebras) to generate C-suite executive summaries.
+- **Interactive Visualizations**: Network flow diagrams and cost heatmaps powered by Plotly and Matplotlib.
+- **Report Exports**: One-click download of PDF executive briefings and raw Excel datasets.
 
 ## Project Structure
 
 ```text
 RouteIQ/
 ├── README.md
-├── app.py
-├── .env.example
-├── assets/
-│   └── README.md
+├── app.py                     # Streamlit app (UI, matrix state, data editor)
+├── config.yaml                # App configuration
+├── .env.example               # Environment variables template
 ├── data/
-│   └── scenarios.csv
-├── scripts/
-│   └── switch_provider.sh
-└── src/
-    ├── ai_explainer.py
-    ├── optimizer.py
-    ├── scenarios.py
-    └── visualizations.py
+│   └── scenarios.csv          # Pre-loaded scenarios (baseline, disruption, cost_surge)
+├── src/
+│   ├── ai_explainer.py        # Executive briefing + Gemini 3.5 Flash vision extraction
+│   ├── features.py            # PDF and Excel report generation
+│   ├── optimizer.py           # PuLP transportation LP / MIP solver engine
+│   ├── scenarios.py          # Dataset & custom scenario loader
+│   └── visualizations.py      # Plotly & Matplotlib chart builders
+└── tests/
+    ├── test_features.py       # PDF/Excel report unit tests
+    ├── test_matrix.py         # Unified matrix state & parser unit tests
+    └── test_optimizer.py      # PuLP solver unit tests
 ```
 
 ## Tech Stack
 
-- Python 3
-- Streamlit
-- PuLP
-- pandas
-- matplotlib / seaborn / networkx
-- openai + python-dotenv
+- **Python 3.9+**
+- **Streamlit** — Web dashboard & data editor
+- **PuLP** — Linear & Mixed-Integer Programming solver
+- **Google Gemini 3.5 Flash** — Vision extraction for cost matrix images
+- **OpenAI API Client** — Multi-provider LLM briefing generation
+- **Plotly & Matplotlib** — Interactive visualization layer
+- **ReportLab & OpenPyXL** — PDF and Excel export generation
 
-## Run Locally
-
-### 1. Setup
+## Quickstart
 
 ```bash
+# Clone the repository
 git clone https://github.com/sauravsz/RouteIQ.git
 cd RouteIQ
-python3 -m venv .venv
-source .venv/bin/activate
-pip install pulp pandas matplotlib seaborn networkx streamlit openai python-dotenv
-```
 
-### 2. Configure AI Provider
+# Install dependencies
+pip install -r requirements.txt
 
-```bash
+# Set up environment variables
 cp .env.example .env
-```
+# Add your GOOGLE_API_KEY to .env
 
-In `.env`:
-- Set `AI_PROVIDER` to one of: `openai`, `groq`, `cerebras`, `google`.
-- Fill the matching API key variable.
-
-Quick provider switch command:
-
-```bash
-./scripts/switch_provider.sh google
-```
-
-### 3. Run App
-
-```bash
+# Run the app
 streamlit run app.py
 ```
-
-Inside the app sidebar:
-- Choose scenario and cost multiplier.
-- Choose AI provider and AI model used for the executive briefing.
-- Optionally enter a custom model name.
-
-## App Screenshots
-
-### Key Metrics (Baseline Scenario)
-![Metrics](assets/01-metrics.png)
-
-### Optimized Network Flow
-![Network Flow](assets/02-network-flow.png)
-
-### Route Cost Heatmap
-![Heatmap](assets/03-cost-heatmap.png)
-
-### AI-Generated Executive Briefing
-![AI Briefing](assets/04-ai-briefing.png)
-
-## Notes
-
-- Secret safety is enforced by `.githooks/pre-commit` when enabled with:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-- If the solver reports infeasible, verify total supply is at least total demand for the selected scenario.
-
-## ❓ Frequently Asked Questions
-
-**Q: Can I use my own supply/demand data?**  
-A: Yes! Simply update `data/scenarios.csv` with your own factories, warehouses, and route costs. The PuLP optimizer dynamically scales to the size of the dataset.
-
-**Q: Which AI provider is best for the executive briefing?**  
-A: The app supports OpenAI, Groq, Cerebras, and Google (Gemini). For the fastest generation, Groq is recommended. For complex analysis, OpenAI (GPT-4o) or Google (Gemini 1.5 Pro) provides deeper insights.
-
-**Q: What happens if demand exceeds supply?**  
-A: The linear programming model requires total supply to be greater than or equal to total demand for a feasible solution. If demand exceeds supply, the solver will report an "Infeasible" status.
-
-## Status
-
-Phases 1 to 7 are complete.
-
-## Author
-
-Saurav

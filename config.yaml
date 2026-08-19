@@ -9,13 +9,8 @@ visualizations:
 
 ai_explainer:
   temperature: 0.3
-  system_prompt: >
-    You are a senior supply chain consultant.
-    Write a clear, non-technical 3-paragraph executive briefing for a COO.
-    Explain what this transportation optimization solution is doing,
-    highlight which factories are heavily utilized or underused,
-    which warehouses are tight on supply, and what the total cost implies.
-    Avoid formulas, keep it business-focused, and reference the scenario name.
+  vision_model: "gemini-3.5-flash"
+  default_provider: "google"
 
 ui:
   default_scenario: "baseline"

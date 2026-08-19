@@ -267,9 +267,11 @@ def main() -> None:
             key="google_vision_key",
         ) if uploaded_image is not None else ""
 
+        has_custom_input = uploaded_file is not None or uploaded_image is not None
+        scenario_options = ["custom"] if has_custom_input else SCENARIOS
         scenario_name = st.selectbox(
             "Scenario",
-            SCENARIOS if uploaded_file is None else ["custom"],
+            scenario_options,
             index=0,
             format_func=_format_scenario_label,
         )
@@ -342,6 +344,15 @@ def main() -> None:
                 st.session_state["extracted_csv"] = csv_text
                 st.session_state["force_run"] = True
                 st.success("Matrix extracted — loaded into editor below.")
+                with st.expander("Extracted CSV preview", expanded=False):
+                    st.code(csv_text, language="csv")
+                    st.download_button(
+                        "Download extracted CSV",
+                        data=csv_text,
+                        file_name="routeiq_extracted.csv",
+                        mime="text/csv",
+                        key="dl_extracted_csv",
+                    )
             except RuntimeError as error:
                 if "NO_GOOGLE_API_KEY" in str(error):
                     st.error("No Google API key found. Paste your Gemini API key in the sidebar (AI Briefing section) and re-upload.")
@@ -441,8 +452,13 @@ def main() -> None:
     # ── Editable matrix table ─────────────────────────────────────
     _, table_center_col, _ = st.columns([0.06, 0.88, 0.06])
     with table_center_col:
+        # Hide Supply value on Demand row by replacing 0 with None for display
+        display_df = matrix_df.copy()
+        demand_mask = display_df["Factory"].astype(str).str.lower() == "demand"
+        display_df.loc[demand_mask, "Supply"] = None
+
         edited = st.data_editor(
-            matrix_df,
+            display_df,
             key=f"{matrix_key}_{version}",
             num_rows="fixed",
             use_container_width=True,
@@ -451,6 +467,9 @@ def main() -> None:
                 "Supply": st.column_config.NumberColumn("Supply", min_value=0.0),
             },
         )
+        # Restore Demand row Supply to 0 after edit (so parser ignores it)
+        demand_mask_out = edited["Factory"].astype(str).str.lower() == "demand"
+        edited.loc[demand_mask_out, "Supply"] = 0.0
 
     st.session_state[state_key] = edited
     matrix_df = edited
@@ -586,20 +605,23 @@ def main() -> None:
     if result_state["briefing_text"]:
         st.write(result_state["briefing_text"])
         
+        # ponytail: cache report bytes in result_state to avoid regeneration on rerun
+        if "pdf_bytes" not in result_state:
+            result_state["pdf_bytes"] = generate_pdf_report(summary, scenario_name, result_state["briefing_text"], result_df)
+            result_state["excel_bytes"] = generate_excel_report(summary, scenario_name, result_df)
+
         btn_col1, btn_col2, _ = st.columns([0.25, 0.25, 0.5])
         with btn_col1:
-            pdf_bytes = generate_pdf_report(summary, scenario_name, result_state["briefing_text"], result_df)
             st.download_button(
-                "📄 Download Executive PDF",
-                data=pdf_bytes,
+                "Download Executive PDF",
+                data=result_state["pdf_bytes"],
                 file_name=f"RouteIQ_{scenario_name}_report.pdf",
                 mime="application/pdf",
             )
         with btn_col2:
-            excel_bytes = generate_excel_report(summary, scenario_name, result_df)
             st.download_button(
-                "📊 Download Excel Dataset",
-                data=excel_bytes,
+                "Download Excel Dataset",
+                data=result_state["excel_bytes"],
                 file_name=f"RouteIQ_{scenario_name}_report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
