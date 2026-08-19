@@ -52,7 +52,7 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
     muted_color = "#94a3b8" if is_dark else "#5f5f5d"
     border_color = "rgba(148,163,184,0.18)" if is_dark else ("#e2e8f0" if is_clean else "#eceae4")
     border_interactive = "rgba(148,163,184,0.4)" if is_dark else ("rgba(15,23,42,0.4)" if is_clean else "rgba(28,28,28,0.4)")
-    panel_bg = "rgba(15,23,42,0.65)" if is_dark else ("#ffffff" if is_clean else "#f7f4ed")
+    panel_bg = "#111827" if is_dark else ("#ffffff" if is_clean else "#f7f4ed")
 
     btn_bg = "#6366f1" if is_dark else "#1c1c1c"
     btn_text = "#ffffff" if is_dark else "#fcfbf8"
@@ -63,7 +63,7 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
 
     css = f"""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
     :root {{
         --rq-bg: {bg_color};
@@ -73,7 +73,7 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
         --rq-border: {border_color};
         --rq-border-interactive: {border_interactive};
         --rq-panel: {panel_bg};
-        --rq-font-primary: 'Sora', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        --rq-font-primary: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
         /* Glide Data Grid (st.data_editor) Overrides */
         --gdg-accent-color: {btn_bg} !important;
@@ -86,26 +86,29 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
         --gdg-text-dark: {gdg_text} !important;
         --gdg-text-medium: {muted_color} !important;
         --gdg-border-color: {border_color} !important;
-        --gdg-font-family: 'Sora', sans-serif !important;
+        --gdg-font-family: 'Geist', 'Inter', sans-serif !important;
     }}
 
-    /* Global Page & Container Base */
+    /* Universal Typography & Element Font Reset per DESIGN.md */
+    *, html, body, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"], button, input, select, textarea, label, p, span, div, h1, h2, h3, h4, h5, h6 {{
+        font-family: var(--rq-font-primary) !important;
+    }}
+
     html, body, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {{
         background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
-        font-family: var(--rq-font-primary) !important;
     }}
 
-    /* Top Header Bar & Toolbar Overrides */
-    header[data-testid="stHeader"], [data-testid="stHeader"], [data-testid="stToolbar"], .stAppHeader, div[data-testid="stDecoration"] {{
+    /* Absolute Top Header Bar & Toolbar Overrides */
+    header[data-testid="stHeader"], [data-testid="stHeader"], [data-testid="stToolbar"], .stAppHeader, div[data-testid="stDecoration"], header[data-testid="stHeader"] * {{
         background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
     }}
 
     /* Sidebar & all inner elements */
-    section[data-testid="stSidebar"], [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], [data-testid="stSidebarNav"] {{
+    section[data-testid="stSidebar"], [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], [data-testid="stSidebarNav"], [data-testid="stSidebarHeader"] {{
         background-color: var(--rq-sidebar) !important;
         background: var(--rq-sidebar) !important;
         border-right: 1px solid var(--rq-border) !important;
@@ -117,22 +120,22 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
 
     /* Typography Hierarchy per DESIGN.md */
     .rq-title {{
-        font-family: 'DM Serif Display', serif;
-        font-size: 3.2rem;
-        font-weight: 600;
-        letter-spacing: -1.5px;
-        color: {text_color};
-        line-height: 1.05;
-        margin-bottom: 0.3rem;
+        font-family: var(--rq-font-primary) !important;
+        font-size: 3.2rem !important;
+        font-weight: 600 !important;
+        letter-spacing: -1.5px !important;
+        color: {text_color} !important;
+        line-height: 1.05 !important;
+        margin-bottom: 0.3rem !important;
     }}
 
     .rq-subtitle {{
-        font-family: var(--rq-font-primary);
-        font-size: 1.125rem;
-        font-weight: 400;
-        color: var(--rq-text-muted);
-        margin-bottom: 2rem;
-        line-height: 1.38;
+        font-family: var(--rq-font-primary) !important;
+        font-size: 1.125rem !important;
+        font-weight: 400 !important;
+        color: var(--rq-text-muted) !important;
+        margin-bottom: 2rem !important;
+        line-height: 1.38 !important;
     }}
 
     .rq-section {{
@@ -142,24 +145,24 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
         letter-spacing: -0.01em !important;
         text-transform: uppercase !important;
         color: var(--rq-text) !important;
-        margin-bottom: 0.8rem;
+        margin-bottom: 0.8rem !important;
     }}
 
     .rq-side-title {{
-        font-size: 0.76rem;
-        font-weight: 600;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: var(--rq-text);
-        margin-top: 0;
-        margin-bottom: 0.42rem;
-        line-height: 1.2;
+        font-size: 0.76rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.05em !important;
+        text-transform: uppercase !important;
+        color: var(--rq-text) !important;
+        margin-top: 0 !important;
+        margin-bottom: 0.42rem !important;
+        line-height: 1.2 !important;
     }}
 
     .rq-divider {{
-        border: none;
-        border-top: 1px solid var(--rq-border);
-        margin: 1.5rem 0;
+        border: none !important;
+        border-top: 1px solid var(--rq-border) !important;
+        margin: 1.5rem 0 !important;
     }}
 
     /* Metrics & Cards per DESIGN.md */
@@ -201,10 +204,6 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
     .stButton > button:hover {{
         opacity: 0.85 !important;
         color: #ffffff !important;
-    }}
-
-    .stButton > button:focus {{
-        box-shadow: rgba(0,0,0,0.1) 0px 4px 12px !important;
     }}
 
     /* Download Buttons & Secondary Outline Buttons */
@@ -342,6 +341,7 @@ def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
+
 def _figure_to_png_bytes(figure: plt.Figure) -> bytes:
     buffer = BytesIO()
     figure.savefig(buffer, format="png", dpi=170, bbox_inches="tight", facecolor=figure.get_facecolor())
