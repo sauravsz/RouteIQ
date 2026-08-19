@@ -555,7 +555,6 @@ def main() -> None:
         st.markdown("<div class='rq-side-title'>Controls</div>", unsafe_allow_html=True)
         auto_run = st.toggle("Auto-run on changes", value=False)
         use_plotly = st.toggle("Interactive Plotly charts", value=True)
-        run_clicked = st.button("▶  Run optimization", type="primary", width="stretch")
 
         st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
         st.markdown("<div class='rq-side-title'>Data Source & Scenario</div>", unsafe_allow_html=True)
@@ -798,7 +797,8 @@ def main() -> None:
         st.session_state[state_key] = edited
         matrix_df = edited
 
-        should_run = auto_run or run_clicked or st.session_state.pop("force_run", False)
+        run_clicked_trans = st.button("▶  Run Optimization", key=f"run_btn_trans_{scenario_name}", type="primary", use_container_width=True)
+        should_run = auto_run or run_clicked_trans or st.session_state.pop("force_run", False)
         results_key = f"results_state_{scenario_name}"
         result_state = st.session_state.get(results_key)
 
@@ -862,7 +862,7 @@ def main() -> None:
             })
 
         elif result_state is None:
-            st.info("Adjust inputs above, then click **▶ Run optimization** in the sidebar.")
+            st.info("Adjust inputs above, then click **▶ Run Optimization**.")
             return
         else:
             st.caption("Showing results from last run — click Run to refresh.")
@@ -1061,7 +1061,8 @@ def main() -> None:
         st.session_state[asgn_state_key] = edited_asgn
         assign_matrix_df = edited_asgn
 
-        asgn_should_run = auto_run or run_clicked
+        run_clicked_assign = st.button("▶  Run Optimization", key=f"run_btn_asgn_{scenario_name}", type="primary", use_container_width=True)
+        asgn_should_run = auto_run or run_clicked_assign
         asgn_results_key = f"asgn_results_state_{scenario_name}_{'max' if is_max else 'min'}"
         asgn_result_state = st.session_state.get(asgn_results_key)
 
@@ -1171,7 +1172,7 @@ def main() -> None:
             else:
                 st.warning(f"Briefing unavailable — {asgn_result_state['briefing_error']}")
         else:
-            st.info("Adjust assignment inputs above, then click **▶ Run optimization** in the sidebar.")
+            st.info("Adjust assignment inputs above, then click **▶ Run Optimization**.")
 
 if __name__ == "__main__":
     main()
