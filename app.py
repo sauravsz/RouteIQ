@@ -42,82 +42,100 @@ def _load_config():
 def _cached_load_scenario(data_path_str: str, scenario_name: str):
     return load_scenario(data_path_str, scenario_name)
 
-def _apply_ui_theme(theme_mode: str = "lovable") -> None:
-    css = """
+def _apply_ui_theme(theme_mode: str = "Lovable Cream") -> None:
+    is_dark = theme_mode == "Dark Mode"
+    is_clean = theme_mode == "Clean Light"
+
+    bg_color = "#0b0f19" if is_dark else ("#ffffff" if is_clean else "#f7f4ed")
+    sidebar_color = "#090d16" if is_dark else ("#f8fafc" if is_clean else "#f2eee5")
+    text_color = "#f8fafc" if is_dark else "#1c1c1c"
+    muted_color = "#94a3b8" if is_dark else "#5f5f5d"
+    border_color = "rgba(148,163,184,0.18)" if is_dark else ("#e2e8f0" if is_clean else "#eceae4")
+    border_interactive = "rgba(148,163,184,0.4)" if is_dark else ("rgba(15,23,42,0.4)" if is_clean else "rgba(28,28,28,0.4)")
+    panel_bg = "rgba(15,23,42,0.65)" if is_dark else ("#ffffff" if is_clean else "#f7f4ed")
+
+    btn_bg = "#6366f1" if is_dark else "#1c1c1c"
+    btn_text = "#ffffff" if is_dark else "#fcfbf8"
+
+    gdg_bg_cell = "#111827" if is_dark else ("#ffffff" if is_clean else "#f7f4ed")
+    gdg_bg_header = "#090d16" if is_dark else ("#f8fafc" if is_clean else "#f2eee5")
+    gdg_text = "#f8fafc" if is_dark else "#1c1c1c"
+
+    css = f"""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 
-    :root {
-        --rq-bg: #f7f4ed;
-        --rq-sidebar: #f2eee5;
-        --rq-text: #1c1c1c;
-        --rq-text-muted: #5f5f5d;
-        --rq-border: #eceae4;
-        --rq-border-interactive: rgba(28, 28, 28, 0.4);
-        --rq-panel: #f7f4ed;
+    :root {{
+        --rq-bg: {bg_color};
+        --rq-sidebar: {sidebar_color};
+        --rq-text: {text_color};
+        --rq-text-muted: {muted_color};
+        --rq-border: {border_color};
+        --rq-border-interactive: {border_interactive};
+        --rq-panel: {panel_bg};
         --rq-font-primary: 'Sora', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-        /* Glide Data Grid (st.data_editor) Lovable Light Overrides */
-        --gdg-accent-color: #1c1c1c !important;
-        --gdg-accent-light: rgba(28, 28, 28, 0.08) !important;
-        --gdg-bg-cell: #f7f4ed !important;
-        --gdg-bg-cell-medium: #f2eee5 !important;
-        --gdg-bg-header: #f2eee5 !important;
-        --gdg-bg-header-has-focus: #eceae4 !important;
-        --gdg-bg-header-hovered: #eceae4 !important;
-        --gdg-text-dark: #1c1c1c !important;
-        --gdg-text-medium: #5f5f5d !important;
-        --gdg-border-color: #eceae4 !important;
+        /* Glide Data Grid (st.data_editor) Overrides */
+        --gdg-accent-color: {btn_bg} !important;
+        --gdg-accent-light: rgba(99, 102, 241, 0.15) !important;
+        --gdg-bg-cell: {gdg_bg_cell} !important;
+        --gdg-bg-cell-medium: {gdg_bg_header} !important;
+        --gdg-bg-header: {gdg_bg_header} !important;
+        --gdg-bg-header-has-focus: {border_color} !important;
+        --gdg-bg-header-hovered: {border_color} !important;
+        --gdg-text-dark: {gdg_text} !important;
+        --gdg-text-medium: {muted_color} !important;
+        --gdg-border-color: {border_color} !important;
         --gdg-font-family: 'Sora', sans-serif !important;
-    }
+    }}
 
     /* Global Page & Container Base */
-    html, body, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
+    html, body, .stApp, main, .main, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {{
         background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
         font-family: var(--rq-font-primary) !important;
-    }
+    }}
 
-    /* Top Header Bar & Toolbar Overrides (eliminates dark top bar) */
-    header[data-testid="stHeader"], [data-testid="stHeader"], [data-testid="stToolbar"], .stAppHeader, div[data-testid="stDecoration"] {
+    /* Top Header Bar & Toolbar Overrides */
+    header[data-testid="stHeader"], [data-testid="stHeader"], [data-testid="stToolbar"], .stAppHeader, div[data-testid="stDecoration"] {{
         background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
-    }
+    }}
 
-    /* Sidebar & all inner elements (eliminates dark sidebar) */
-    section[data-testid="stSidebar"], [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], [data-testid="stSidebarNav"] {
+    /* Sidebar & all inner elements */
+    section[data-testid="stSidebar"], [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], [data-testid="stSidebarNav"] {{
         background-color: var(--rq-sidebar) !important;
         background: var(--rq-sidebar) !important;
         border-right: 1px solid var(--rq-border) !important;
-    }
+    }}
 
-    [data-testid="stSidebar"] * {
+    [data-testid="stSidebar"] * {{
         color: var(--rq-text) !important;
-    }
+    }}
 
     /* Typography Hierarchy per DESIGN.md */
-    .rq-title {
+    .rq-title {{
         font-family: 'DM Serif Display', serif;
         font-size: 3.2rem;
         font-weight: 600;
         letter-spacing: -1.5px;
-        color: #1c1c1c;
+        color: {text_color};
         line-height: 1.05;
         margin-bottom: 0.3rem;
-    }
+    }}
 
-    .rq-subtitle {
+    .rq-subtitle {{
         font-family: var(--rq-font-primary);
         font-size: 1.125rem;
         font-weight: 400;
         color: var(--rq-text-muted);
         margin-bottom: 2rem;
         line-height: 1.38;
-    }
+    }}
 
-    .rq-section {
+    .rq-section {{
         font-family: var(--rq-font-primary) !important;
         font-size: 0.875rem !important;
         font-weight: 600 !important;
@@ -125,9 +143,9 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         text-transform: uppercase !important;
         color: var(--rq-text) !important;
         margin-bottom: 0.8rem;
-    }
+    }}
 
-    .rq-side-title {
+    .rq-side-title {{
         font-size: 0.76rem;
         font-weight: 600;
         letter-spacing: 0.05em;
@@ -136,40 +154,40 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         margin-top: 0;
         margin-bottom: 0.42rem;
         line-height: 1.2;
-    }
+    }}
 
-    .rq-divider {
+    .rq-divider {{
         border: none;
         border-top: 1px solid var(--rq-border);
         margin: 1.5rem 0;
-    }
+    }}
 
     /* Metrics & Cards per DESIGN.md */
-    [data-testid="stMetric"] {
+    [data-testid="stMetric"] {{
         background: var(--rq-panel) !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
         padding: 1.2rem 1.4rem !important;
         box-shadow: none !important;
-    }
+    }}
 
-    [data-testid="stMetricLabel"] p {
+    [data-testid="stMetricLabel"] p {{
         color: var(--rq-text-muted) !important;
         font-size: 0.875rem !important;
         font-weight: 400 !important;
-    }
+    }}
 
-    [data-testid="stMetricValue"] > div {
+    [data-testid="stMetricValue"] > div {{
         color: var(--rq-text) !important;
         font-size: 2rem !important;
         font-weight: 600 !important;
         letter-spacing: -0.9px !important;
-    }
+    }}
 
-    /* Primary Dark Buttons with Lovable Inset Shadow */
-    .stButton > button {
-        background-color: #1c1c1c !important;
-        color: #fcfbf8 !important;
+    /* Primary Buttons */
+    .stButton > button {{
+        background-color: {btn_bg} !important;
+        color: {btn_text} !important;
         border-radius: 6px !important;
         padding: 8px 16px !important;
         border: none !important;
@@ -178,149 +196,149 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         font-weight: 400 !important;
         box-shadow: rgba(255,255,255,0.2) 0px 0.5px 0px 0px inset, rgba(0,0,0,0.2) 0px 0px 0px 0.5px inset, rgba(0,0,0,0.05) 0px 1px 2px 0px !important;
         transition: opacity 0.15s ease !important;
-    }
+    }}
 
-    .stButton > button:hover {
+    .stButton > button:hover {{
         opacity: 0.85 !important;
         color: #ffffff !important;
-    }
+    }}
 
-    .stButton > button:focus {
+    .stButton > button:focus {{
         box-shadow: rgba(0,0,0,0.1) 0px 4px 12px !important;
-    }
+    }}
 
     /* Download Buttons & Secondary Outline Buttons */
-    .stDownloadButton > button {
+    .stDownloadButton > button {{
         background-color: transparent !important;
-        color: #1c1c1c !important;
+        color: {text_color} !important;
         border: 1px solid var(--rq-border-interactive) !important;
         border-radius: 6px !important;
         padding: 8px 16px !important;
         font-family: var(--rq-font-primary) !important;
         font-size: 0.875rem !important;
         font-weight: 400 !important;
-    }
+    }}
 
-    .stDownloadButton > button:hover {
+    .stDownloadButton > button:hover {{
         background-color: rgba(28, 28, 28, 0.04) !important;
-    }
+    }}
 
     /* File Uploader Dropzone Overrides */
-    [data-testid="stFileUploader"], [data-testid="stFileUploaderDropzone"], section[data-testid="stFileUploaderDropzone"], div[data-testid="stFileUploaderDropzone"] {
+    [data-testid="stFileUploader"], [data-testid="stFileUploaderDropzone"], section[data-testid="stFileUploaderDropzone"], div[data-testid="stFileUploaderDropzone"] {{
         background-color: var(--rq-sidebar) !important;
         background: var(--rq-sidebar) !important;
         border: 1px dashed var(--rq-border-interactive) !important;
         border-radius: 12px !important;
         color: var(--rq-text) !important;
-    }
+    }}
 
-    [data-testid="stFileUploaderDropzone"] * {
+    [data-testid="stFileUploaderDropzone"] * {{
         color: var(--rq-text) !important;
         background-color: transparent !important;
-    }
+    }}
 
     /* Inputs, Selectboxes, Dropdowns, Textareas per DESIGN.md */
-    input[type="text"], input[type="number"], input[type="password"], textarea, [data-baseweb="select"] > div, [data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
+    input[type="text"], input[type="number"], input[type="password"], textarea, [data-baseweb="select"] > div, [data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {{
         background-color: var(--rq-bg) !important;
         color: var(--rq-text) !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 6px !important;
         font-family: var(--rq-font-primary) !important;
-    }
+    }}
 
-    [data-testid="stSidebar"] div[data-baseweb="select"] > div {
+    [data-testid="stSidebar"] div[data-baseweb="select"] > div {{
         background-color: var(--rq-sidebar) !important;
         border: 1px solid var(--rq-border) !important;
-    }
+    }}
 
-    [data-baseweb="menu"] li, [role="option"] {
+    [data-baseweb="menu"] li, [role="option"] {{
         background-color: var(--rq-bg) !important;
         color: var(--rq-text) !important;
-    }
+    }}
 
-    [data-baseweb="menu"] li:hover, [role="option"]:hover {
-        background-color: #f2eee5 !important;
-    }
+    [data-baseweb="menu"] li:hover, [role="option"]:hover {{
+        background-color: {sidebar_color} !important;
+    }}
 
     /* Sliders & Toggles */
-    [data-testid="stSlider"] * {
+    [data-testid="stSlider"] * {{
         color: var(--rq-text) !important;
-    }
+    }}
 
-    div[data-baseweb="slider"] div {
+    div[data-baseweb="slider"] div {{
         background-color: var(--rq-text) !important;
-    }
+    }}
 
     /* Tabs per DESIGN.md */
-    .stTabs [data-baseweb="tab-list"] {
+    .stTabs [data-baseweb="tab-list"] {{
         gap: 1.5rem;
         border-bottom: 1px solid var(--rq-border);
         background: transparent !important;
-    }
+    }}
 
-    .stTabs [data-baseweb="tab"] {
+    .stTabs [data-baseweb="tab"] {{
         color: var(--rq-text-muted) !important;
         font-weight: 400 !important;
         font-size: 1rem !important;
         font-family: var(--rq-font-primary) !important;
         background: transparent !important;
-    }
+    }}
 
-    .stTabs [aria-selected="true"] {
+    .stTabs [aria-selected="true"] {{
         color: var(--rq-text) !important;
         font-weight: 600 !important;
         border-bottom: 2px solid var(--rq-text) !important;
-    }
+    }}
 
     /* Expanders & Forms per DESIGN.md */
-    [data-testid="stExpander"], summary[data-testid="stExpanderToggleHeader"], div[data-testid="stExpanderDetails"], [data-testid="stForm"] {
+    [data-testid="stExpander"], summary[data-testid="stExpanderToggleHeader"], div[data-testid="stExpanderDetails"], [data-testid="stForm"] {{
         background-color: var(--rq-bg) !important;
         background: var(--rq-bg) !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
         color: var(--rq-text) !important;
         box-shadow: none !important;
-    }
+    }}
 
-    summary[data-testid="stExpanderToggleHeader"] * {
+    summary[data-testid="stExpanderToggleHeader"] * {{
         color: var(--rq-text) !important;
-    }
+    }}
 
     /* Dataframe / Data Editor Table overrides */
-    [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
+    [data-testid="stDataFrame"], [data-testid="stDataEditor"] {{
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
         overflow: hidden !important;
         background-color: var(--rq-bg) !important;
-    }
+    }}
 
     /* Alerts (success, info, warning, error) */
-    [data-testid="stNotification"], div[data-baseweb="notification"], .stAlert {
-        background-color: #f2eee5 !important;
+    [data-testid="stNotification"], div[data-baseweb="notification"], .stAlert {{
+        background-color: {sidebar_color} !important;
         border: 1px solid var(--rq-border) !important;
         color: var(--rq-text) !important;
         border-radius: 8px !important;
-    }
+    }}
 
     /* Code Blocks */
-    .stCodeBlock, [data-testid="stCodeBlock"] pre {
-        background-color: #f2eee5 !important;
+    .stCodeBlock, [data-testid="stCodeBlock"] pre {{
+        background-color: {sidebar_color} !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 8px !important;
         color: var(--rq-text) !important;
-    }
+    }}
 
-    .rq-table-label {
+    .rq-table-label {{
         font-family: var(--rq-font-primary);
         font-size: 0.875rem;
         font-weight: 600;
         color: var(--rq-text);
         margin-bottom: 0.4rem;
-    }
+    }}
 
-    .rq-side-gap-xs { height: 0.16rem; }
-    .rq-side-gap-sm { height: 0.3rem; }
-    .rq-side-gap-md { height: 0.5rem; }
+    .rq-side-gap-xs {{ height: 0.16rem; }}
+    .rq-side-gap-sm {{ height: 0.3rem; }}
+    .rq-side-gap-md {{ height: 0.5rem; }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -637,12 +655,24 @@ def main() -> None:
     else:
         matrix_df = _get_matrix_state(scenario_name, base_routes_df)
 
-    # ── Page Header ───────────────────────────────────────────────────────
-    st.markdown("<div class='rq-title'>RouteIQ</div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='rq-subtitle'>Multi-scenario transportation & assignment optimizer with AI executive briefing</div>",
-        unsafe_allow_html=True,
-    )
+    # ── Page Header & Theme Switcher ──────────────────────────────────────
+    head_col1, head_col2 = st.columns([0.75, 0.25])
+    with head_col1:
+        st.markdown("<div class='rq-title'>RouteIQ</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='rq-subtitle'>Multi-scenario transportation & assignment optimizer with AI executive briefing</div>",
+            unsafe_allow_html=True,
+        )
+    with head_col2:
+        theme_choice = st.selectbox(
+            "Theme Mode",
+            ["Lovable Cream", "Dark Mode", "Clean Light"],
+            index=0,
+            key="ui_theme_selector",
+        )
+
+    _apply_ui_theme(theme_choice)
+    is_dark_mode = (theme_choice == "Dark Mode")
 
     main_tab_trans, main_tab_assign = st.tabs([
         "🔀 Transportation Optimizer",
