@@ -56,6 +56,19 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         --rq-border-interactive: rgba(28, 28, 28, 0.4);
         --rq-panel: #f7f4ed;
         --rq-font-primary: 'Sora', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+        /* Glide Data Grid (st.data_editor) Lovable Light Overrides */
+        --gdg-accent-color: #1c1c1c !important;
+        --gdg-accent-light: rgba(28, 28, 28, 0.08) !important;
+        --gdg-bg-cell: #f7f4ed !important;
+        --gdg-bg-cell-medium: #f2eee5 !important;
+        --gdg-bg-header: #f2eee5 !important;
+        --gdg-bg-header-has-focus: #eceae4 !important;
+        --gdg-bg-header-hovered: #eceae4 !important;
+        --gdg-text-dark: #1c1c1c !important;
+        --gdg-text-medium: #5f5f5d !important;
+        --gdg-border-color: #eceae4 !important;
+        --gdg-font-family: 'Sora', sans-serif !important;
     }
 
     /* Global Page Base */
@@ -197,6 +210,14 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         box-shadow: rgba(0,0,0,0.1) 0px 4px 12px !important;
     }
 
+    /* File Uploader styling */
+    [data-testid="stFileUploader"] {
+        background-color: var(--rq-sidebar) !important;
+        border: 1px dashed var(--rq-border-interactive) !important;
+        border-radius: 12px !important;
+        padding: 1rem !important;
+    }
+
     /* Tabs per DESIGN.md */
     .stTabs [data-baseweb="tab-list"] {
         gap: 1.5rem;
@@ -222,6 +243,13 @@ def _apply_ui_theme(theme_mode: str = "lovable") -> None:
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
         box-shadow: none !important;
+    }
+
+    /* Dataframe / Data Editor Table overrides */
+    [data-testid="stDataFrame"] {
+        border: 1px solid var(--rq-border) !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
     }
 
     .rq-table-label {
