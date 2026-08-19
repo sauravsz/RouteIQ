@@ -1,54 +1,10 @@
-import numpy as np
 import pandas as pd
 from io import BytesIO
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from src.optimizer import solve_transportation
-
-def calculate_carbon_emissions(
-    routes_df: pd.DataFrame,
-    co2_per_unit_dist: float = 0.15,
-) -> pd.DataFrame:
-    df = routes_df.copy()
-    distance = df["distance"] if "distance" in df.columns else df["cost"] * 10.0
-    df["co2_emissions_kg"] = df["flow"] * distance * co2_per_unit_dist
-    return df
-
-def run_monte_carlo_simulation(
-    routes_df: pd.DataFrame,
-    supply: Dict[str, float],
-    base_demand: Dict[str, float],
-    n_simulations: int = 50,
-    demand_std_dev_pct: float = 0.15,
-) -> pd.DataFrame:
-    results = []
-    for i in range(n_simulations):
-        stochastic_demand = {}
-        for w, mean_d in base_demand.items():
-            sampled = float(np.random.normal(mean_d, mean_d * demand_std_dev_pct))
-            stochastic_demand[w] = max(0.0, sampled)
-
-        try:
-            _, summary = solve_transportation(routes_df, supply, stochastic_demand)
-            results.append({
-                "run": i + 1,
-                "total_cost": summary["total_cost"],
-                "avg_utilization": np.mean(list(summary["factory_utilization"].values())),
-                "feasible": True,
-            })
-        except Exception:
-            results.append({
-                "run": i + 1,
-                "total_cost": np.nan,
-                "avg_utilization": np.nan,
-                "feasible": False,
-            })
-
-    return pd.DataFrame(results)
-
 def generate_pdf_report(
     summary: Dict[str, float],
     scenario_name: str,

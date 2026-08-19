@@ -131,6 +131,14 @@ def _apply_ui_theme(theme_mode: str) -> None:
         font-weight: 600 !important;
     }}
 
+    .rq-table-label {{
+        font-family: 'Sora', sans-serif;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--rq-muted);
+        margin-bottom: 0.4rem;
+    }}
+
     .rq-side-gap-xs {{ height: 0.16rem; }}
     .rq-side-gap-sm {{ height: 0.3rem; }}
     .rq-side-gap-md {{ height: 0.5rem; }}
@@ -153,9 +161,10 @@ def _build_matrix_from_routes(routes_df: pd.DataFrame) -> pd.DataFrame:
     cost_matrix = routes_df.pivot(index="factory", columns="warehouse", values="cost").sort_index()
     matrix = cost_matrix.reset_index(names="Factory")
     matrix.insert(1, "Supply", matrix["Factory"].map(supply_map).astype(float))
-    demand_row = {"Factory": DEMAND_ROW, "Supply": None}
+    demand_row = {"Factory": DEMAND_ROW, "Supply": 0.0}
     demand_row.update({w: float(demand_map[w]) for w in cost_matrix.columns})
-    return pd.concat([matrix, pd.DataFrame([demand_row])], ignore_index=True)
+    demand_df = pd.DataFrame([demand_row]).astype(matrix.dtypes.to_dict(), errors="ignore")
+    return pd.concat([matrix, demand_df], ignore_index=True)
 
 def _get_matrix_state(scenario_name: str, routes_df: pd.DataFrame) -> pd.DataFrame:
     state_key = f"matrix_state_{scenario_name}"
@@ -175,20 +184,46 @@ def _to_optimizer_inputs(matrix_df: pd.DataFrame) -> tuple[pd.DataFrame, dict, d
     demand_row = df[demand_mask].iloc[0]
     factory_df = df[~demand_mask]
 
-    supply_map = {row["Factory"]: float(row["Supply"]) for _, row in factory_df.iterrows()}
-    demand_map = {w: float(demand_row[w]) for w in warehouse_cols}
+    # BUG 5: deduplicate factory names (last row wins)
+    if factory_df["Factory"].duplicated().any():
+        factory_df = factory_df.drop_duplicates(subset="Factory", keep="last")
 
+    # BUG 3: warn-worthy blank rows already filtered by != "", but catch NaN names
+    factory_df = factory_df[factory_df["Factory"].notna()]
+    if factory_df.empty:
+        raise RuntimeError("No factories found in the matrix. Add at least one factory row.")
+
+    import numpy as np
+
+    supply_map = {}
+    for _, row in factory_df.iterrows():
+        sv = row["Supply"]
+        if sv is None or (isinstance(sv, float) and np.isnan(sv)):
+            raise RuntimeError(f"Factory '{row['Factory']}' has no Supply value.")
+        supply_map[row["Factory"]] = float(sv)
+
+    demand_map = {}
+    for w in warehouse_cols:
+        dv = demand_row[w]
+        if dv is None or (isinstance(dv, float) and np.isnan(dv)):
+            raise RuntimeError(f"Warehouse '{w}' has no Demand value.")
+        demand_map[w] = float(dv)
+
+    # BUG 4: validate no NaN costs
     rows: list[dict] = []
     for _, frow in factory_df.iterrows():
         factory = frow["Factory"]
         for w in warehouse_cols:
+            cost_val = frow[w]
+            if cost_val is None or (isinstance(cost_val, float) and np.isnan(cost_val)):
+                raise RuntimeError(f"Missing cost for route {factory} → {w}. Fill in all cost cells.")
             rows.append({
                 "scenario": "interactive",
                 "factory": factory,
                 "warehouse": w,
                 "supply": supply_map[factory],
                 "demand": demand_map[w],
-                "cost": float(frow[w]),
+                "cost": float(cost_val),
             })
 
     return pd.DataFrame(rows), supply_map, demand_map
@@ -225,6 +260,12 @@ def main() -> None:
             type=["png", "jpg", "jpeg", "webp"],
             help="Photo of a cost matrix table — AI extracts supply, demand and costs",
         )
+        google_vision_key = st.text_input(
+            "Google API Key (for image extraction)",
+            type="password",
+            placeholder="Required for image upload",
+            key="google_vision_key",
+        ) if uploaded_image is not None else ""
 
         scenario_name = st.selectbox(
             "Scenario",
@@ -292,7 +333,7 @@ def main() -> None:
                     csv_text = extract_matrix_from_image(
                         uploaded_image.getvalue(),
                         mime_type=uploaded_image.type or "image/png",
-                        api_key=custom_api_key.strip(),
+                        api_key=(google_vision_key or "").strip(),
                     )
                 extracted_df = pd.read_csv(BytesIO(csv_text.encode("utf-8")))
                 extracted_routes, _, _ = load_scenario(extracted_df, "custom")
