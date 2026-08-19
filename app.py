@@ -361,58 +361,96 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    # ── Editable Network Inputs ───────────────────────────────────────────
+    # ── Editable Network Inputs ───────────────────────────────────────
     st.markdown("<p class='rq-section'>Network Inputs</p>", unsafe_allow_html=True)
-    st.caption("Edit costs, Supply and Demand directly. Use **+ / −** below the table to add or remove factories (rows) and warehouses (columns). Last row is Demand.")
 
     matrix_key = f"matrix_editor_{scenario_name}"
     state_key = f"matrix_state_{scenario_name}"
-    # ponytail: versioned widget key so warehouse add/remove rebuilds editor cleanly
     version = st.session_state.get(f"{state_key}_v", 0)
+    warehouse_cols = [c for c in matrix_df.columns if c not in ("Factory", "Supply")]
+    factory_names = [r for r in matrix_df["Factory"].tolist() if str(r).lower() != "demand"]
 
+    tab_add, tab_remove = st.tabs(["Add", "Remove"])
+
+    with tab_add:
+        ac1, ac2 = st.columns(2, gap="medium")
+        with ac1:
+            new_factory = st.text_input("Factory name", key=f"new_f_{scenario_name}", placeholder="e.g. F4")
+            if st.button("Add factory", key=f"add_f_{scenario_name}", use_container_width=True):
+                name = (new_factory or "").strip()
+                if not name:
+                    st.warning("Enter a name.")
+                elif name in matrix_df["Factory"].values:
+                    st.warning(f"'{name}' already exists.")
+                else:
+                    default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
+                    new_row = {"Factory": name, "Supply": 0.0}
+                    new_row.update({w: default_cost for w in warehouse_cols})
+                    demand_idx = matrix_df.index[matrix_df["Factory"].astype(str).str.lower() == "demand"]
+                    upper = matrix_df.loc[:demand_idx[0]-1] if len(demand_idx) else matrix_df.iloc[:-1]
+                    lower = matrix_df.loc[demand_idx[0]:] if len(demand_idx) else matrix_df.iloc[-1:]
+                    updated = pd.concat([upper, pd.DataFrame([new_row]), lower], ignore_index=True)
+                    st.session_state[state_key] = updated
+                    st.session_state[f"{state_key}_v"] = version + 1
+                    st.rerun()
+        with ac2:
+            new_warehouse = st.text_input("Warehouse name", key=f"new_wh_{scenario_name}", placeholder="e.g. W5")
+            if st.button("Add warehouse", key=f"add_wh_{scenario_name}", use_container_width=True):
+                name = (new_warehouse or "").strip()
+                if not name:
+                    st.warning("Enter a name.")
+                elif name in matrix_df.columns:
+                    st.warning(f"'{name}' already exists.")
+                else:
+                    default_cost = float(matrix_df.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
+                    updated = matrix_df.copy()
+                    demand_mask = updated["Factory"].astype(str).str.lower() == "demand"
+                    updated[name] = default_cost
+                    updated.loc[demand_mask, name] = 0.0
+                    st.session_state[state_key] = updated
+                    st.session_state[f"{state_key}_v"] = version + 1
+                    st.rerun()
+
+    with tab_remove:
+        rc1, rc2 = st.columns(2, gap="medium")
+        with rc1:
+            rm_factory = st.selectbox("Factory to remove", options=factory_names, index=None, key=f"rm_f_{scenario_name}", placeholder="Select factory...")
+            if st.button("Remove factory", key=f"rm_f_btn_{scenario_name}", use_container_width=True):
+                if not rm_factory:
+                    st.warning("Select a factory first.")
+                elif len(factory_names) <= 1:
+                    st.warning("Cannot remove the last factory.")
+                else:
+                    updated = matrix_df[matrix_df["Factory"] != rm_factory].reset_index(drop=True)
+                    st.session_state[state_key] = updated
+                    st.session_state[f"{state_key}_v"] = version + 1
+                    st.rerun()
+        with rc2:
+            rm_warehouse = st.selectbox("Warehouse to remove", options=warehouse_cols, index=None, key=f"rm_wh_{scenario_name}", placeholder="Select warehouse...")
+            if st.button("Remove warehouse", key=f"rm_wh_btn_{scenario_name}", use_container_width=True):
+                if not rm_warehouse:
+                    st.warning("Select a warehouse first.")
+                elif len(warehouse_cols) <= 1:
+                    st.warning("Cannot remove the last warehouse.")
+                else:
+                    updated = matrix_df.drop(columns=[rm_warehouse])
+                    st.session_state[state_key] = updated
+                    st.session_state[f"{state_key}_v"] = version + 1
+                    st.rerun()
+
+    # ── Editable matrix table ─────────────────────────────────────
     _, table_center_col, _ = st.columns([0.06, 0.88, 0.06])
     with table_center_col:
         edited = st.data_editor(
             matrix_df,
             key=f"{matrix_key}_{version}",
-            num_rows="dynamic",
+            num_rows="fixed",
             use_container_width=True,
             column_config={
-                "Factory": st.column_config.TextColumn("Factory", required=True),
+                "Factory": st.column_config.TextColumn("Factory", disabled=True),
                 "Supply": st.column_config.NumberColumn("Supply", min_value=0.0),
             },
         )
-
-        wh_add_col, wh_add_btn, wh_rm_col, wh_rm_btn = st.columns([0.25, 0.12, 0.25, 0.12], gap="small")
-        warehouse_cols = [c for c in edited.columns if c not in ("Factory", "Supply")]
-        with wh_add_col:
-            new_warehouse = st.text_input("Add warehouse", key=f"new_wh_{scenario_name}", placeholder="e.g. W4", label_visibility="collapsed")
-        with wh_add_btn:
-            if st.button("➕ Add", key=f"add_wh_{scenario_name}") and new_warehouse.strip():
-                name = new_warehouse.strip()
-                if name in edited.columns:
-                    st.warning(f"Column '{name}' already exists.")
-                else:
-                    default_cost = float(edited.drop(columns=["Factory", "Supply"], errors="ignore").select_dtypes("number").mean().mean() or 5.0)
-                    updated = edited.copy()
-                    updated[name] = None
-                    demand_mask = updated["Factory"].astype(str).str.lower() == "demand"
-                    updated.loc[~demand_mask, name] = default_cost
-                    updated.loc[demand_mask, name] = 0.0
-                    st.session_state[state_key] = updated
-                    st.session_state[f"{state_key}_v"] = version + 1
-                    st.rerun()
-        with wh_rm_col:
-            rm_warehouse = st.selectbox("Remove warehouse", options=warehouse_cols, index=None, key=f"rm_wh_{scenario_name}", placeholder="Select...", label_visibility="collapsed")
-        with wh_rm_btn:
-            if st.button("➖ Remove", key=f"rm_wh_{scenario_name}_btn") and rm_warehouse:
-                if len(warehouse_cols) <= 1:
-                    st.warning("Cannot remove the last warehouse.")
-                else:
-                    updated = edited.drop(columns=[rm_warehouse])
-                    st.session_state[state_key] = updated
-                    st.session_state[f"{state_key}_v"] = version + 1
-                    st.rerun()
 
     st.session_state[state_key] = edited
     matrix_df = edited
