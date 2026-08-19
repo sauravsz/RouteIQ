@@ -552,75 +552,72 @@ def main() -> None:
 
     # ── Sidebar ──────────────────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("<div class='rq-side-title'>Controls</div>", unsafe_allow_html=True)
+        st.markdown("<div class='rq-side-title'>Theme & Display</div>", unsafe_allow_html=True)
+        new_theme = st.segmented_control(
+            "Theme Mode",
+            options=["Lovable Cream", "Dark Mode", "Clean Light"],
+            default=theme_choice,
+            key="ui_theme_selector",
+        )
+        if new_theme and new_theme != theme_choice:
+            st.rerun()
+
+        st.markdown("<div class='rq-side-gap-xs'></div>", unsafe_allow_html=True)
         auto_run = st.toggle("Auto-run on changes", value=False)
         use_plotly = st.toggle("Interactive Plotly charts", value=True)
 
         st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-title'>Data Source & Scenario</div>", unsafe_allow_html=True)
-        
-        uploaded_file = st.file_uploader("Upload Custom CSV", type=["csv"], help="Upload custom scenario dataset")
-        uploaded_image = st.file_uploader(
-            "Upload Cost Matrix Image",
-            type=["png", "jpg", "jpeg", "webp"],
-            help="Photo of a cost matrix table — AI extracts supply, demand and costs",
-        )
-        google_vision_key = st.text_input(
-            "Google API Key (for image extraction)",
-            type="password",
-            placeholder="Required for image upload",
-            key="google_vision_key",
-        ) if uploaded_image is not None else ""
 
-        has_custom_input = uploaded_file is not None or uploaded_image is not None
-        scenario_options = ["custom"] if has_custom_input else SCENARIOS
-        scenario_name = st.selectbox(
-            "Scenario",
-            scenario_options,
-            index=0,
-            format_func=_format_scenario_label,
-        )
-        
-        col_mult, col_reset = st.columns([0.7, 0.3])
-        with col_mult:
+        with st.expander("📁 Data Source & Solvers", expanded=True):
+            uploaded_file = st.file_uploader("Upload Custom CSV", type=["csv"], help="Upload custom scenario dataset")
+            uploaded_image = st.file_uploader(
+                "Upload Cost Matrix Image",
+                type=["png", "jpg", "jpeg", "webp"],
+                help="Photo of a cost matrix table — AI extracts supply, demand and costs",
+            )
+            google_vision_key = st.text_input(
+                "Google API Key (for image extraction)",
+                type="password",
+                placeholder="Required for image upload",
+                key="google_vision_key",
+            ) if uploaded_image is not None else ""
+
+            has_custom_input = uploaded_file is not None or uploaded_image is not None
+            scenario_options = ["custom"] if has_custom_input else SCENARIOS
+            scenario_name = st.selectbox(
+                "Scenario",
+                scenario_options,
+                index=0,
+                format_func=_format_scenario_label,
+            )
             cost_multiplier = st.slider("Cost multiplier", 0.5, 3.0, 1.0, 0.1)
-        with col_reset:
-            st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-            if st.button("Reset", key="reset_multiplier"):
-                cost_multiplier = 1.0
 
-        st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-title'>Solver & MIP Settings</div>", unsafe_allow_html=True)
-        
-        available_solvers = get_available_solvers()
-        selected_solver = st.selectbox("Solver engine", list(available_solvers.keys()), index=0)
-        solver_timeout = st.slider("Solver Timeout (sec)", 2, 60, 10, 1)
-        enable_mip = st.checkbox("Enable MIP Fixed-Charge", value=False)
-        fixed_lane_cost = st.number_input("Fixed Lane Cost", min_value=0.0, value=0.0, step=10.0) if enable_mip else 0.0
+            available_solvers = get_available_solvers()
+            selected_solver = st.selectbox("Solver engine", list(available_solvers.keys()), index=0)
+            solver_timeout = st.slider("Solver Timeout (sec)", 2, 60, 10, 1)
+            enable_mip = st.checkbox("Enable MIP Fixed-Charge", value=False)
+            fixed_lane_cost = st.number_input("Fixed Lane Cost", min_value=0.0, value=0.0, step=10.0) if enable_mip else 0.0
 
-        st.markdown("<div class='rq-side-gap-md'></div>", unsafe_allow_html=True)
-        st.markdown("<div class='rq-side-title'>AI Briefing</div>", unsafe_allow_html=True)
+        with st.expander("🤖 AI Briefing Settings", expanded=False):
+            provider_options = get_supported_providers()
+            default_provider = "google" if "google" in provider_options else provider_options[0]
+            selected_provider = st.selectbox(
+                "Provider",
+                provider_options,
+                index=provider_options.index(default_provider),
+                format_func=_format_provider_label,
+            )
 
-        provider_options = get_supported_providers()
-        default_provider = "google" if "google" in provider_options else provider_options[0]
-        selected_provider = st.selectbox(
-            "Provider",
-            provider_options,
-            index=provider_options.index(default_provider),
-            format_func=_format_provider_label,
-        )
-
-        model_options = get_provider_model_options(selected_provider)
-        default_model = get_provider_default_model(selected_provider)
-        default_model_index = model_options.index(default_model) if default_model in model_options else 0
-        selected_model = st.selectbox("Model", model_options, index=default_model_index)
-        custom_model = st.text_input("Custom model override", value="", placeholder="e.g. gpt-4")
-        custom_api_key = st.text_input(
-            f"{_format_provider_label(selected_provider)} API Key", 
-            type="password", 
-            placeholder="Optional (uses default if empty)",
-        )
-        active_model = custom_model.strip() or selected_model
+            model_options = get_provider_model_options(selected_provider)
+            default_model = get_provider_default_model(selected_provider)
+            default_model_index = model_options.index(default_model) if default_model in model_options else 0
+            selected_model = st.selectbox("Model", model_options, index=default_model_index)
+            custom_api_key = st.text_input(
+                f"{_format_provider_label(selected_provider)} API Key", 
+                type="password", 
+                placeholder="Optional (uses default if empty)",
+            )
+            active_model = selected_model
 
     # ── Load data ─────────────────────────────────────────────────────────
     if uploaded_file is not None:
@@ -668,25 +665,12 @@ def main() -> None:
     else:
         matrix_df = _get_matrix_state(scenario_name, base_routes_df)
 
-    # ── Page Header & Theme Switcher ──────────────────────────────────────
-    head_col1, head_col2 = st.columns([0.75, 0.25])
-    with head_col1:
-        st.markdown("<div class='rq-title'>RouteIQ</div>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='rq-subtitle'>Multi-scenario transportation & assignment optimizer with AI executive briefing</div>",
-            unsafe_allow_html=True,
-        )
-    with head_col2:
-        st.markdown("<div style='height: 0.4rem;'></div>", unsafe_allow_html=True)
-        new_theme = st.segmented_control(
-            "Theme Mode",
-            options=["Lovable Cream", "Dark Mode", "Clean Light"],
-            default=theme_choice,
-            key="ui_theme_selector",
-            label_visibility="collapsed",
-        )
-        if new_theme and new_theme != theme_choice:
-            st.rerun()
+    # ── Page Header ───────────────────────────────────────────────────────
+    st.markdown("<div class='rq-title'>RouteIQ</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='rq-subtitle'>Multi-scenario transportation & assignment optimizer with AI executive briefing</div>",
+        unsafe_allow_html=True,
+    )
 
     main_tab_trans, main_tab_assign = st.tabs([
         "🔀 Transportation Optimizer",
@@ -772,27 +756,23 @@ def main() -> None:
                         st.rerun()
 
         # ── Editable matrix table ─────────────────────────────────────
-        _, table_center_col, _ = st.columns([0.06, 0.88, 0.06])
-        with table_center_col:
-            # Hide Supply value on Demand row by replacing 0 with None for display
-            display_df = matrix_df.copy()
-            demand_mask = display_df["Factory"].astype(str).str.lower() == "demand"
-            display_df.loc[demand_mask, "Supply"] = None
+        display_df = matrix_df.copy()
+        demand_mask = display_df["Factory"].astype(str).str.lower() == "demand"
+        display_df.loc[demand_mask, "Supply"] = None
 
-            edited = st.data_editor(
-                display_df,
-                key=f"{matrix_key}_{version}",
-                num_rows="fixed",
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "Factory": st.column_config.TextColumn("Factory", disabled=True),
-                    "Supply": st.column_config.NumberColumn("Supply", min_value=0.0),
-                },
-            )
-            # Restore Demand row Supply to 0 after edit (so parser ignores it)
-            demand_mask_out = edited["Factory"].astype(str).str.lower() == "demand"
-            edited.loc[demand_mask_out, "Supply"] = 0.0
+        edited = st.data_editor(
+            display_df,
+            key=f"{matrix_key}_{version}",
+            num_rows="fixed",
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Factory": st.column_config.TextColumn("Factory", disabled=True),
+                "Supply": st.column_config.NumberColumn("Supply", min_value=0.0),
+            },
+        )
+        demand_mask_out = edited["Factory"].astype(str).str.lower() == "demand"
+        edited.loc[demand_mask_out, "Supply"] = 0.0
 
         st.session_state[state_key] = edited
         matrix_df = edited
@@ -1045,18 +1025,16 @@ def main() -> None:
                         st.rerun()
 
         # ── Editable Assignment Matrix Table ──────────────────────────
-        _, asgn_table_center, _ = st.columns([0.06, 0.88, 0.06])
-        with asgn_table_center:
-            edited_asgn = st.data_editor(
-                assign_matrix_df,
-                key=f"{asgn_matrix_key}_{asgn_version}",
-                num_rows="fixed",
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "Agent": st.column_config.TextColumn("Agent (Worker/Machine)", disabled=True),
-                },
-            )
+        edited_asgn = st.data_editor(
+            assign_matrix_df,
+            key=f"{asgn_matrix_key}_{asgn_version}",
+            num_rows="fixed",
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Agent": st.column_config.TextColumn("Agent (Worker/Machine)", disabled=True),
+            },
+        )
 
         st.session_state[asgn_state_key] = edited_asgn
         assign_matrix_df = edited_asgn
