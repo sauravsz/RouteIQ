@@ -6,6 +6,14 @@ import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
 
+# Lovable theme tokens
+CREAM_BG = "#f7f4ed"
+CHARCOAL_TEXT = "#1c1c1c"
+MUTED_TEXT = "#5f5f5d"
+BORDER_COLOR = "#eceae4"
+FACTORY_NODE_COLOR = "#2563eb"
+WAREHOUSE_NODE_COLOR = "#059669"
+
 def plot_network_plotly(result_df: pd.DataFrame, title: str = "Network Flow") -> go.Figure:
     factories = result_df["factory"].unique().tolist()
     warehouses = result_df["warehouse"].unique().tolist()
@@ -19,17 +27,13 @@ def plot_network_plotly(result_df: pd.DataFrame, title: str = "Network Flow") ->
         node_x.append(0)
         node_y.append(idx)
         node_text.append(f"Factory: {f}")
-        node_color.append("#60a5fa")
+        node_color.append(FACTORY_NODE_COLOR)
 
     for idx, w in enumerate(warehouses):
         node_x.append(1)
         node_y.append(idx)
         node_text.append(f"Warehouse: {w}")
-        node_color.append("#34d399")
-
-    edge_x = []
-    edge_y = []
-    edge_hover = []
+        node_color.append(WAREHOUSE_NODE_COLOR)
 
     fig = go.Figure()
 
@@ -43,7 +47,7 @@ def plot_network_plotly(result_df: pd.DataFrame, title: str = "Network Flow") ->
                 x=[0, 1],
                 y=[f_idx, w_idx],
                 mode="lines",
-                line=dict(width=max(1, row["flow"] / 3.0), color="#94a3b8"),
+                line=dict(width=max(1.5, row["flow"] / 2.5), color=CHARCOAL_TEXT),
                 hoverinfo="text",
                 text=f"Route: {row['factory']} → {row['warehouse']}<br>Flow: {row['flow']}<br>Cost: {row['cost']:.2f}",
                 showlegend=False,
@@ -55,24 +59,25 @@ def plot_network_plotly(result_df: pd.DataFrame, title: str = "Network Flow") ->
             x=node_x,
             y=node_y,
             mode="markers+text",
-            marker=dict(size=35, color=node_color, line=dict(width=2, color="#1e293b")),
+            marker=dict(size=36, color=node_color, line=dict(width=1.5, color=BORDER_COLOR)),
             text=[t.split(": ")[1] for t in node_text],
             textposition="middle center",
             hoverinfo="text",
             hovertext=node_text,
+            textfont=dict(color="#ffffff", family="Sora, sans-serif", size=12),
             showlegend=False,
         )
     )
 
     fig.update_layout(
-        title=title,
+        title=dict(text=title, font=dict(family="Sora, sans-serif", size=16, color=CHARCOAL_TEXT)),
         showlegend=False,
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        template="plotly_dark",
+        template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Sora, sans-serif"),
+        font=dict(family="Sora, sans-serif", color=CHARCOAL_TEXT),
         height=400,
         margin=dict(l=20, r=20, t=40, b=20),
     )
@@ -85,14 +90,16 @@ def plot_cost_heatmap_plotly(routes_df: pd.DataFrame, title: str = "Cost Heatmap
         pivot,
         text_auto=".1f",
         aspect="auto",
-        color_continuous_scale="Reds",
+        color_continuous_scale="Oranges",
         title=title,
         labels=dict(x="Warehouse", y="Factory", color="Cost"),
     )
     fig.update_layout(
+        title=dict(text=title, font=dict(family="Sora, sans-serif", size=16, color=CHARCOAL_TEXT)),
+        template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Sora, sans-serif"),
+        font=dict(family="Sora, sans-serif", color=CHARCOAL_TEXT),
         height=400,
         margin=dict(l=20, r=20, t=40, b=20),
     )
@@ -130,12 +137,12 @@ def plot_network(
     else:
         figure = axis.figure
 
-    text_color = "#e5e7eb" if dark_mode else "#0f172a"
-    edge_color = "#94a3b8" if dark_mode else "#64748b"
-    factory_color = "#60a5fa" if dark_mode else "#bfdbfe"
-    warehouse_color = "#34d399" if dark_mode else "#bbf7d0"
-    figure.patch.set_facecolor("#111827" if dark_mode else "white")
-    axis.set_facecolor("#111827" if dark_mode else "white")
+    text_color = CHARCOAL_TEXT
+    edge_color = MUTED_TEXT
+    factory_color = FACTORY_NODE_COLOR
+    warehouse_color = WAREHOUSE_NODE_COLOR
+    figure.patch.set_facecolor(CREAM_BG)
+    axis.set_facecolor(CREAM_BG)
 
     edges = graph.edges(data=True)
     widths = [max(0.5, data["weight"] / 5.0) for _, _, data in edges]
@@ -148,7 +155,7 @@ def plot_network(
         node_size=800,
         node_color=[factory_color if node in factories else warehouse_color for node in graph.nodes()],
         edge_color=edge_color,
-        font_color=text_color,
+        font_color="#ffffff",
         width=widths,
         arrows=False,
     )
@@ -175,8 +182,8 @@ def plot_cost_heatmap(
     else:
         figure = axis.figure
 
-    text_color = "#e5e7eb" if dark_mode else "#0f172a"
-    background_color = "#111827" if dark_mode else "white"
+    text_color = CHARCOAL_TEXT
+    background_color = CREAM_BG
     figure.patch.set_facecolor(background_color)
     axis.set_facecolor(background_color)
 
@@ -184,9 +191,9 @@ def plot_cost_heatmap(
         pivot,
         annot=True,
         fmt=".1f",
-        cmap="mako" if dark_mode else "Reds",
+        cmap="Oranges",
         ax=axis,
-        annot_kws={"color": text_color if dark_mode else "#111827"},
+        annot_kws={"color": CHARCOAL_TEXT},
     )
     axis.set_title(title, color=text_color)
     axis.set_xlabel("Warehouse", color=text_color)

@@ -42,106 +42,133 @@ def _load_config():
 def _cached_load_scenario(data_path_str: str, scenario_name: str):
     return load_scenario(data_path_str, scenario_name)
 
-def _apply_ui_theme(theme_mode: str) -> None:
-    is_dark = theme_mode.lower() == "dark"
-
-    bg_page = "linear-gradient(160deg, #0b0f19 0%, #111827 100%)" if is_dark else "linear-gradient(160deg, #f7f9fc 0%, #eef2f7 100%)"
-    text_base = "#f8fafc" if is_dark else "#1f2937"
-    text_muted = "#94a3b8" if is_dark else "#64748b"
-    border = "rgba(148,163,184,0.18)" if is_dark else "rgba(148,163,184,0.28)"
-    panel_bg = "rgba(15,23,42,0.65)" if is_dark else "rgba(255,255,255,0.86)"
-
-    css = f"""
+def _apply_ui_theme(theme_mode: str = "lovable") -> None:
+    css = """
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 
-    :root {{
-        --rq-text: {text_base};
-        --rq-muted: {text_muted};
-        --rq-border: {border};
-        --rq-panel: {panel_bg};
-    }}
+    :root {
+        --rq-bg: #f7f4ed;
+        --rq-sidebar: #f2eee5;
+        --rq-text: #1c1c1c;
+        --rq-muted: #5f5f5d;
+        --rq-border: #eceae4;
+        --rq-border-interactive: rgba(28, 28, 28, 0.4);
+        --rq-panel: #f7f4ed;
+    }
 
-    .stApp {{
-        background: {bg_page} !important;
+    .stApp {
+        background: var(--rq-bg) !important;
         color: var(--rq-text) !important;
         font-family: 'Sora', sans-serif;
-    }}
+    }
 
-    [data-testid="stSidebar"] {{
-        background: #090d16 !important;
+    [data-testid="stSidebar"] {
+        background: var(--rq-sidebar) !important;
         border-right: 1px solid var(--rq-border) !important;
-    }}
+    }
 
-    .rq-title {{
+    .rq-title {
         font-family: 'DM Serif Display', serif;
-        font-size: 2.2rem;
+        font-size: 2.5rem;
         font-weight: 400;
-        letter-spacing: -0.03em;
-        color: #ffffff;
-        line-height: 1.2;
+        letter-spacing: -0.04em;
+        color: #1c1c1c;
+        line-height: 1.1;
         margin-bottom: 0.2rem;
-    }}
+    }
 
-    .rq-subtitle {{
+    .rq-subtitle {
         font-family: 'Sora', sans-serif;
-        font-size: 0.86rem;
+        font-size: 0.9rem;
         color: var(--rq-muted);
         margin-bottom: 1.6rem;
-        letter-spacing: 0.01em;
-    }}
+        letter-spacing: -0.01em;
+    }
 
-    .rq-section {{
+    .rq-section {
         font-family: 'Sora', sans-serif !important;
-        font-size: 0.74rem !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.1em !important;
+        font-size: 0.76rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.05em !important;
         text-transform: uppercase !important;
-        color: #818cf8 !important;
+        color: #1c1c1c !important;
         margin-bottom: 0.8rem;
-    }}
+    }
 
-    .rq-divider {{
+    .rq-divider {
         border: none;
         border-top: 1px solid var(--rq-border);
         margin: 1.2rem 0;
-    }}
+    }
 
-    .rq-side-title {{
+    .rq-side-title {
         font-size: 0.76rem;
-        font-weight: 700;
-        letter-spacing: 0.1em;
+        font-weight: 600;
+        letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: #818cf8;
+        color: #1c1c1c;
         margin-top: 0;
         margin-bottom: 0.42rem;
         line-height: 1.2;
-    }}
+    }
 
-    [data-testid="stMetric"] {{
+    [data-testid="stMetric"] {
         background: var(--rq-panel) !important;
         border: 1px solid var(--rq-border) !important;
         border-radius: 12px !important;
         padding: 1rem 1.2rem !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-    }}
+        box-shadow: none !important;
+    }
 
-    [data-testid="stMetricValue"] > div {{
-        color: #ffffff !important;
+    [data-testid="stMetricValue"] > div {
+        color: #1c1c1c !important;
         font-weight: 600 !important;
-    }}
+    }
 
-    .rq-table-label {{
+    .stButton > button {
+        background-color: #1c1c1c !important;
+        color: #fcfbf8 !important;
+        border-radius: 6px !important;
+        padding: 8px 16px !important;
+        border: none !important;
+        box-shadow: rgba(255,255,255,0.2) 0px 0.5px 0px 0px inset, rgba(0,0,0,0.2) 0px 0px 0px 0.5px inset, rgba(0,0,0,0.05) 0px 1px 2px 0px !important;
+        font-weight: 500 !important;
+        transition: opacity 0.15s ease !important;
+    }
+
+    .stButton > button:hover {
+        opacity: 0.9 !important;
+        color: #ffffff !important;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 1.5rem;
+        border-bottom: 1px solid var(--rq-border);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        color: var(--rq-muted) !important;
+        font-weight: 500 !important;
+        font-family: 'Sora', sans-serif !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        color: #1c1c1c !important;
+        border-bottom: 2px solid #1c1c1c !important;
+    }
+
+    .rq-table-label {
         font-family: 'Sora', sans-serif;
         font-size: 0.82rem;
         font-weight: 600;
-        color: var(--rq-muted);
+        color: var(--rq-text);
         margin-bottom: 0.4rem;
-    }}
+    }
 
-    .rq-side-gap-xs {{ height: 0.16rem; }}
-    .rq-side-gap-sm {{ height: 0.3rem; }}
-    .rq-side-gap-md {{ height: 0.5rem; }}
+    .rq-side-gap-xs { height: 0.16rem; }
+    .rq-side-gap-sm { height: 0.3rem; }
+    .rq-side-gap-md { height: 0.5rem; }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -411,8 +438,8 @@ def main() -> None:
         )
         active_model = custom_model.strip() or selected_model
 
-    _apply_ui_theme("dark")
-    is_dark_mode = True
+    _apply_ui_theme("lovable")
+    is_dark_mode = False
 
     # ── Load data ─────────────────────────────────────────────────────────
     if uploaded_file is not None:
