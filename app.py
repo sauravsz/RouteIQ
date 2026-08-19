@@ -546,8 +546,9 @@ def _format_provider_label(provider: str) -> str:
 
 def main() -> None:
     st.set_page_config(page_title="RouteIQ", layout="wide", page_icon="🔀")
-    _apply_ui_theme("lovable")
-    is_dark_mode = False
+    theme_choice = st.session_state.get("ui_theme_selector", "Lovable Cream")
+    _apply_ui_theme(theme_choice)
+    is_dark_mode = (theme_choice == "Dark Mode")
 
     # ── Sidebar ──────────────────────────────────────────────────────────
     with st.sidebar:
@@ -677,15 +678,17 @@ def main() -> None:
             unsafe_allow_html=True,
         )
     with head_col2:
-        theme_choice = st.selectbox(
+        st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+        current_idx = ["Lovable Cream", "Dark Mode", "Clean Light"].index(theme_choice) if theme_choice in ["Lovable Cream", "Dark Mode", "Clean Light"] else 0
+        new_theme = st.selectbox(
             "Theme Mode",
             ["Lovable Cream", "Dark Mode", "Clean Light"],
-            index=0,
+            index=current_idx,
             key="ui_theme_selector",
+            label_visibility="collapsed",
         )
-
-    _apply_ui_theme(theme_choice)
-    is_dark_mode = (theme_choice == "Dark Mode")
+        if new_theme != theme_choice:
+            st.rerun()
 
     main_tab_trans, main_tab_assign = st.tabs([
         "🔀 Transportation Optimizer",
