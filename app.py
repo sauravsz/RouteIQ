@@ -877,9 +877,9 @@ def main() -> None:
 
         if use_plotly:
             with chart_col_1:
-                st.plotly_chart(plot_network_plotly(result_df, title="Interactive Network Flow"), use_container_width=True)
+                st.plotly_chart(plot_network_plotly(result_df, title="Interactive Network Flow", dark_mode=is_dark_mode), use_container_width=True)
             with chart_col_2:
-                st.plotly_chart(plot_cost_heatmap_plotly(routes_df, title="Interactive Cost Heatmap"), use_container_width=True)
+                st.plotly_chart(plot_cost_heatmap_plotly(routes_df, title="Interactive Cost Heatmap", dark_mode=is_dark_mode), use_container_width=True)
         else:
             with chart_col_1:
                 st.markdown("<p class='rq-table-label'>Network Flow</p>", unsafe_allow_html=True)
@@ -1118,9 +1118,9 @@ def main() -> None:
             achart1, achart2 = st.columns(2, gap="medium")
             if use_plotly:
                 with achart1:
-                    st.plotly_chart(plot_network_plotly(a_result_df, title="Assignment Flow Graph"), use_container_width=True)
+                    st.plotly_chart(plot_network_plotly(a_result_df, title="Assignment Flow Graph", dark_mode=is_dark_mode), use_container_width=True)
                 with achart2:
-                    st.plotly_chart(plot_cost_heatmap_plotly(a_routes_df, title="Assignment Matrix Heatmap"), use_container_width=True)
+                    st.plotly_chart(plot_cost_heatmap_plotly(a_routes_df, title="Assignment Matrix Heatmap", dark_mode=is_dark_mode), use_container_width=True)
             else:
                 with achart1:
                     fig_net, ax_net = plt.subplots(figsize=(7, 4.5), constrained_layout=True)
